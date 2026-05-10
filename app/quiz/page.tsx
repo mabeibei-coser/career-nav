@@ -7,31 +7,31 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StepIndicator } from "@/components/ui/step-indicator";
 import { cn } from "@/lib/utils";
-import { loadQuizBank } from "@/lib/quiz-bank";
 import { scoreQuiz } from "@/lib/scoring";
 import { startAfterQuiz } from "@/lib/report-bg-runner";
-import {
-  QUIZ_DIMENSION_NAMES,
-  type JobFormData,
-  type QuizAnswer,
-  type QuizQuestion,
-} from "@/lib/types";
+import type { JobFormData, QuizAnswer, QuizQuestion } from "@/lib/types";
 
 const cubicEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
-// 5 级 Likert 标签 + 对应 raw 值（1-5）
-const LIKERT_LEVELS: { value: 1 | 2 | 3 | 4 | 5; label: string }[] = [
-  { value: 1, label: "完全不像我" },
-  { value: 2, label: "不太符合" },
-  { value: 3, label: "有时如此" },
-  { value: 4, label: "比较符合" },
-  { value: 5, label: "完全符合" },
-];
+const AUTO_NEXT_DELAY_MS = 400;
 
-const AUTO_NEXT_DELAY_MS = 300;
+/** 选项标签显示样式 */
+const OPTION_LABEL_COLORS: Record<"A" | "B" | "C" | "D", string> = {
+  A: "bg-blue-100 text-blue-700",
+  B: "bg-emerald-100 text-emerald-700",
+  C: "bg-violet-100 text-violet-700",
+  D: "bg-amber-100 text-amber-700",
+};
+
+const OPTION_LABEL_ACTIVE_COLORS: Record<"A" | "B" | "C" | "D", string> = {
+  A: "bg-blue-500 text-white",
+  B: "bg-emerald-500 text-white",
+  C: "bg-violet-500 text-white",
+  D: "bg-amber-500 text-white",
+};
 
 interface AnswerMap {
-  [questionId: string]: 1 | 2 | 3 | 4 | 5;
+  [questionId: string]: "A" | "B" | "C" | "D";
 }
 
 function readFormData(): JobFormData | null {
@@ -40,28 +40,10 @@ function readFormData(): JobFormData | null {
     const saved = sessionStorage.getItem("formData");
     if (!saved) return null;
     const parsed = JSON.parse(saved) as JobFormData;
-    if (!parsed.identity) return null; // identity 是必填项
+    if (!parsed.identity) return null;
     return parsed;
   } catch {
     return null;
-  }
-}
-
-function readSavedAnswers(): AnswerMap {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = sessionStorage.getItem("quizAnswers");
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as QuizAnswer[];
-    const map: AnswerMap = {};
-    for (const a of parsed) {
-      if (a.raw >= 1 && a.raw <= 5) {
-        map[a.questionId] = a.raw;
-      }
-    }
-    return map;
-  } catch {
-    return {};
   }
 }
 
@@ -77,19 +59,22 @@ export default function QuizPage() {
   const [submitting, setSubmitting] = useState(false);
   const autoNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 拉题（POST /api/quiz/bank，携带 identity 做身份分流）
-  const fetchBank = useCallback(async (identity?: string) => {
+  // 拉题（POST /api/quiz/bank，携带完整 formData 做个性化生成）
+  const fetchBank = useCallback(async (fd: JobFormData) => {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/quiz/bank`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identity: identity ?? "general_unemployed" }),
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/quiz/bank`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ formData: fd }),
+          cache: "no-store",
+        },
+      );
       if (!res.ok) {
-        let msg = `题库加载失败（HTTP ${res.status}）`;
+        let msg = `题目加载失败（HTTP ${res.status}）`;
         try {
           const data = await res.json();
           if (data?.errorMessage) msg = data.errorMessage;
@@ -99,36 +84,35 @@ export default function QuizPage() {
       const data = await res.json();
       const list = (data?.questions ?? []) as QuizQuestion[];
       if (!Array.isArray(list) || list.length === 0) {
-        throw new Error("题库返回为空，请稍后重试");
+        throw new Error("测评题目返回为空，请稍后重试");
       }
       setQuestions(list);
+      // 题目也存一份到 sessionStorage，方便 handleSubmit 在极端情况下访问
+      try {
+        sessionStorage.setItem("quizQuestions", JSON.stringify(list));
+      } catch {}
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "题库加载失败");
+      setLoadError(e instanceof Error ? e.message : "题目加载失败");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // mount: 校验 formData → 预编译 /interview → 拉题 → 恢复已答
+  // mount: 校验 formData → 拉题
   useEffect(() => {
     if (typeof window === "undefined") return;
     const fd = readFormData();
     if (!fd) {
-      // 没填表 → 友好提示后跳回 /form
       try {
-        // sessionStorage 留个标记，/form 可选地展示提示
-        window.sessionStorage.setItem(
-          "quizRedirectReason",
-          "请先填写岗位与背景信息",
-        );
+        window.sessionStorage.setItem("quizRedirectReason", "请先填写岗位与背景信息");
       } catch {}
       router.replace("/form");
       return;
     }
     setFormData(fd);
-    setAnswers(readSavedAnswers());
     router.prefetch("/interview");
-    void fetchBank(fd.identity);
+    // SJT 题目每次由 LLM 生成，不恢复上次答题（避免答案与新题对不上）
+    void fetchBank(fd);
   }, [router, fetchBank]);
 
   // 卸载时清掉自动跳题定时器
@@ -141,7 +125,7 @@ export default function QuizPage() {
   const currentQ = questions[currentIndex];
   const total = questions.length;
   const isLast = total > 0 && currentIndex === total - 1;
-  const selectedRaw = currentQ ? answers[currentQ.id] : undefined;
+  const selectedLabel = currentQ ? answers[currentQ.id] : undefined;
   const answeredCount = Object.keys(answers).length;
   const allAnswered = total > 0 && questions.every((q) => answers[q.id]);
   const progressPct = total > 0 ? ((currentIndex + 1) / total) * 100 : 0;
@@ -152,8 +136,7 @@ export default function QuizPage() {
         .filter((q) => map[q.id])
         .map((q) => ({
           questionId: q.id,
-          dimension: q.dimension,
-          raw: map[q.id]!,
+          selectedLabel: map[q.id]!,
         }));
       try {
         sessionStorage.setItem("quizAnswers", JSON.stringify(arr));
@@ -163,13 +146,13 @@ export default function QuizPage() {
     [],
   );
 
-  const handleSelect = (value: 1 | 2 | 3 | 4 | 5) => {
+  const handleSelect = (label: "A" | "B" | "C" | "D") => {
     if (!currentQ || submitting) return;
-    const updated = { ...answers, [currentQ.id]: value };
+    const updated = { ...answers, [currentQ.id]: label };
     setAnswers(updated);
     persistAnswers(updated, questions);
 
-    // 最后一题不自动跳；中间题 0.3s 自动跳下题
+    // 最后一题不自动跳；中间题 400ms 后自动跳下题
     if (autoNextTimerRef.current) clearTimeout(autoNextTimerRef.current);
     if (!isLast) {
       autoNextTimerRef.current = setTimeout(() => {
@@ -193,12 +176,10 @@ export default function QuizPage() {
     setSubmitting(true);
     try {
       const finalAnswers = persistAnswers(answers, questions);
-      // 用全题库（不只 8 题）让 scoring 找到 reverse / weights
-      const bank = loadQuizBank();
-      const scoring = scoreQuiz(finalAnswers, bank);
+      // SJT 评分：直接使用当前题目（含选项 weights）
+      const scoring = scoreQuiz(finalAnswers, questions);
       try {
         sessionStorage.setItem("scoring", JSON.stringify(scoring));
-        // 进入新流程，清掉旧 reportData 缓存
         sessionStorage.removeItem("reportData");
       } catch {}
       // 触发后台生成 strength / positioning / advice
@@ -214,9 +195,12 @@ export default function QuizPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--blue-50)] via-white to-[var(--blue-100)] px-6">
-        <div className="flex flex-col items-center gap-3 text-[var(--muted-foreground)]">
+        <div className="flex flex-col items-center gap-4 text-[var(--muted-foreground)]">
           <Loader2 className="size-8 animate-spin text-[var(--blue-500)]" />
-          <p className="text-sm">题库加载中...</p>
+          <div className="text-sm text-center">
+            <p className="font-medium text-[var(--navy-800)]">正在为你生成专属测评题目</p>
+            <p className="text-xs mt-1 text-[var(--muted-foreground)]">根据你的背景个性化定制，约需 5-15 秒</p>
+          </div>
         </div>
       </div>
     );
@@ -227,18 +211,14 @@ export default function QuizPage() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--blue-50)] via-white to-[var(--blue-100)] px-6">
         <div className="max-w-md w-full text-center space-y-4">
           <AlertCircle className="mx-auto size-10 text-destructive" />
-          <div className="text-lg font-medium text-[var(--navy-900)]">
-            测评加载失败
-          </div>
-          <div className="text-sm text-muted-foreground break-words">
-            {loadError}
-          </div>
+          <div className="text-lg font-medium text-[var(--navy-900)]">测评加载失败</div>
+          <div className="text-sm text-muted-foreground break-words">{loadError}</div>
           <div className="flex justify-center gap-3">
             <Button variant="outline" onClick={() => router.push("/form")}>
               返回填写信息
             </Button>
             <Button
-              onClick={() => void fetchBank(formData?.identity)}
+              onClick={() => formData && void fetchBank(formData)}
               className="bg-[var(--blue-500)] hover:bg-[var(--blue-600)]"
             >
               重试
@@ -285,9 +265,9 @@ export default function QuizPage() {
           <AnimatePresence mode="wait">
             <motion.div
               key={currentQ.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2, ease: cubicEase }}
             >
               {/* 题干 */}
@@ -297,67 +277,70 @@ export default function QuizPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-[var(--muted-foreground)] mb-1.5 tracking-wide">
-                    {QUIZ_DIMENSION_NAMES[currentQ.dimension]}
+                    情境判断
                   </div>
-                  <h2 className="text-[18px] sm:text-[20px] font-semibold leading-relaxed text-[var(--navy-900)]">
+                  <h2 className="text-[17px] sm:text-[19px] font-semibold leading-relaxed text-[var(--navy-900)]">
                     {currentQ.text}
                   </h2>
                 </div>
               </div>
 
-              {/* 5 级 Likert 选项（移动端纵向） */}
+              {/* 4 个 SJT 选项（纵向排列） */}
               <div className="flex flex-col gap-2.5">
-                {LIKERT_LEVELS.map((level) => {
-                  const active = selectedRaw === level.value;
+                {(["A", "B", "C", "D"] as const).map((label) => {
+                  const option = currentQ.options.find((o) => o.label === label);
+                  if (!option) return null;
+                  const active = selectedLabel === label;
                   return (
                     <button
-                      key={level.value}
+                      key={label}
                       type="button"
-                      onClick={() => handleSelect(level.value)}
+                      onClick={() => handleSelect(label)}
                       aria-pressed={active}
-                      aria-label={`${level.label}（${level.value} 分）`}
+                      aria-label={`选项 ${label}：${option.text}`}
                       className={cn(
-                        // 触控目标 ≥ 48×48
-                        "min-h-[52px] w-full flex items-center gap-4 rounded-xl border-2 px-4 py-3 text-left transition-all",
+                        "min-h-[56px] w-full flex items-start gap-3 rounded-xl border-2 px-4 py-3.5 text-left transition-all",
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blue-500)]/40",
                         active
                           ? "border-[var(--blue-500)] bg-[var(--blue-500)]/5 shadow-sm"
                           : "border-[var(--blue-100)] bg-white/70 hover:border-[var(--blue-300)] hover:bg-white",
                       )}
                     >
-                      {/* 圆点 */}
-                      <div
+                      {/* 选项标签徽章 */}
+                      <span
                         className={cn(
-                          "shrink-0 flex items-center justify-center rounded-full border-2 transition-all",
-                          // 圆点本体 28px，配合按钮整体的 ≥52 触控目标
-                          "size-7",
+                          "shrink-0 size-7 rounded-full flex items-center justify-center text-sm font-bold transition-all mt-0.5",
                           active
-                            ? "border-[var(--blue-500)] bg-white"
-                            : "border-[var(--blue-200)] bg-white",
+                            ? OPTION_LABEL_ACTIVE_COLORS[label]
+                            : OPTION_LABEL_COLORS[label],
                         )}
                       >
-                        {active && (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ duration: 0.15, ease: cubicEase }}
-                            className="size-3.5 rounded-full bg-[var(--blue-500)]"
-                          />
-                        )}
-                      </div>
+                        {label}
+                      </span>
 
-                      <div className="flex-1 flex items-center">
-                        <span
-                          className={cn(
-                            "text-[15px] sm:text-base leading-relaxed",
-                            active
-                              ? "text-[var(--navy-900)] font-medium"
-                              : "text-[var(--navy-800)]",
-                          )}
+                      {/* 选项文字 */}
+                      <span
+                        className={cn(
+                          "flex-1 text-[15px] sm:text-base leading-relaxed",
+                          active
+                            ? "text-[var(--navy-900)] font-medium"
+                            : "text-[var(--navy-800)]",
+                        )}
+                      >
+                        {option.text}
+                      </span>
+
+                      {/* 已选 checkmark */}
+                      {active && (
+                        <motion.span
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ duration: 0.15, ease: cubicEase }}
+                          className="shrink-0 mt-0.5 text-[var(--blue-500)]"
                         >
-                          {level.label}
-                        </span>
-                      </div>
+                          ✓
+                        </motion.span>
+                      )}
                     </button>
                   );
                 })}
@@ -372,10 +355,7 @@ export default function QuizPage() {
               variant="outline"
               onClick={goPrev}
               disabled={currentIndex === 0 || submitting}
-              className={cn(
-                "h-11 px-5",
-                currentIndex === 0 && "invisible",
-              )}
+              className={cn("h-11 px-5", currentIndex === 0 && "invisible")}
             >
               上一题
             </Button>
@@ -384,7 +364,7 @@ export default function QuizPage() {
               <Button
                 type="button"
                 onClick={goNext}
-                disabled={!selectedRaw || submitting}
+                disabled={!selectedLabel || submitting}
                 className="h-11 px-6 bg-[var(--blue-500)] hover:bg-[var(--blue-600)]"
               >
                 下一题
@@ -411,13 +391,11 @@ export default function QuizPage() {
 
         {/* Tips */}
         <p className="text-center text-xs text-[var(--muted-foreground)] mt-6 leading-relaxed">
-          测评无对错，凭直觉作答即可；
+          测评无对错，选最符合你实际的做法即可；
           <br className="sm:hidden" />
-          可点"上一题"返回修改，已答内容自动保存。
+          可点"上一题"返回修改。
           {formData?.resumeFileName && (
-            <span className="block mt-1">
-              已识别简历：{formData.resumeFileName}
-            </span>
+            <span className="block mt-1">已识别简历：{formData.resumeFileName}</span>
           )}
         </p>
       </div>

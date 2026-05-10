@@ -70,9 +70,9 @@ export function OverviewSection({ data, index, total }: Props) {
       {personality?.description && (
         <motion.div
           {...fadeIn}
-          className="mb-5 border-l-[3px] border-[var(--blue-500)] pl-4 py-1"
+          className="mb-5"
         >
-          <p className="text-[14px] sm:text-[15px] leading-[1.75] text-[var(--navy-800)]">
+          <p className="report-takeaway">
             {personality.description}
           </p>
         </motion.div>

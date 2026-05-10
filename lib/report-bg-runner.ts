@@ -56,7 +56,7 @@ function fingerprintForm(formData: JobFormData, quizAnswers: QuizAnswer[]): stri
     resumeHash,
   ].join("|");
   const quizPart = quizAnswers
-    .map((a) => `${a.questionId}:${a.dimension}:${a.raw}`)
+    .map((a) => `${a.questionId}:${a.selectedLabel}`)
     .join(",");
   return `${formPart}#${quizPart}`;
 }

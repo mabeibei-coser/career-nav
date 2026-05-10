@@ -54,13 +54,13 @@ describe("buildBaseContext", () => {
 
   it("含 quizAnswers 时输出 '职业偏好量表结果'", () => {
     const quizAnswers: QuizAnswer[] = [
-      { questionId: "P-01", dimension: "personality", raw: 4 },
-      { questionId: "W-01", dimension: "workstyle", raw: 3 },
+      { questionId: "SJT-01", selectedLabel: "B" },
+      { questionId: "SJT-02", selectedLabel: "A" },
     ];
     const ctx = buildBaseContext(baseFormData, quizAnswers);
     expect(ctx).toContain("职业偏好量表结果");
-    expect(ctx).toContain("P-01");
-    expect(ctx).toContain("评分 4");
+    expect(ctx).toContain("SJT-01");
+    expect(ctx).toContain("选项 B");
   });
 
   it("含 interviewSummary 时输出 '两轮访谈摘要'", () => {

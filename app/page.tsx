@@ -409,7 +409,7 @@ export default function HomePage() {
               >
                 谨世 ATA
                 <br />
-                职业定位报告
+                职业导航报告
               </motion.h1>
 
               <motion.div
@@ -597,7 +597,7 @@ export default function HomePage() {
               核心能力
             </Badge>
             <h2 className="text-3xl sm:text-4xl font-bold text-[var(--foreground)] tracking-tight">
-              为什么选择谨世 ATA 职业定位报告
+              为什么选择谨世 ATA 职业导航报告
             </h2>
             <p className="mt-4 text-base text-[var(--muted-foreground)] max-w-xl mx-auto">
               将职业咨询从经验判断升级为数据驱动的专业分析
@@ -670,7 +670,7 @@ export default function HomePage() {
               让应届求职准备不再迷茫
             </h3>
             <p className="text-sm text-blue-200/50 max-w-lg mx-auto mb-8 leading-relaxed">
-              面向应届大学生的职业定位工具：AI 结合你的意向岗位、性格测评和简历，生成一份可执行、有数据的职业定位报告
+              面向应届大学生的职业导航工具：AI 结合你的意向岗位、性格测评和简历，生成一份可执行、有数据的职业导航报告
             </p>
 
             <Link href="/form">
@@ -696,7 +696,7 @@ export default function HomePage() {
                 <FileBarChart className="size-4 text-white" />
               </div>
               <span className="text-sm font-semibold text-[var(--foreground)]">
-                谨世 ATA 职业定位报告
+                谨世 ATA 职业导航报告
               </span>
             </div>
             <span className="text-xs text-[var(--muted-foreground)]">

@@ -1,94 +1,60 @@
 import { describe, it, expect } from "vitest";
-import {
-  loadQuizBank,
-  sampleQuestions,
-  validateBank,
-} from "../quiz-bank";
-import type { QuizDimension } from "../types";
-
-const EXPECTED_DIMENSIONS: QuizDimension[] = [
-  "personality",
-  "workstyle",
-  "value",
-  "direction",
-];
+import { loadQuizBank, getFixedQuestions } from "../quiz-bank";
 
 describe("loadQuizBank", () => {
-  it("dimensions 数组长度 = 4", () => {
+  it("返回 QuizBank 对象，含 version 和 fixedQuestions", () => {
     const bank = loadQuizBank();
-    expect(bank.dimensions).toHaveLength(4);
+    expect(bank).toBeDefined();
+    expect(typeof bank.version).toBe("string");
+    expect(Array.isArray(bank.fixedQuestions)).toBe(true);
   });
 
-  it("4 个 dimension key 完整：personality / workstyle / value / direction", () => {
+  it("fixedQuestions 至少有 1 题（SJT-01）", () => {
     const bank = loadQuizBank();
-    const keys = bank.dimensions.map((d) => d.key);
-    for (const required of EXPECTED_DIMENSIONS) {
-      expect(keys).toContain(required);
-    }
-  });
-
-  it("每维度 ≥ 5 题（实际是 6 题）", () => {
-    const bank = loadQuizBank();
-    for (const dim of bank.dimensions) {
-      expect(dim.questions.length).toBeGreaterThanOrEqual(5);
-    }
-  });
-
-  it("注入 dimension 字段（每题都有）", () => {
-    const bank = loadQuizBank();
-    for (const dim of bank.dimensions) {
-      for (const q of dim.questions) {
-        expect(q.dimension).toBe(dim.key);
-      }
-    }
+    expect(bank.fixedQuestions.length).toBeGreaterThanOrEqual(1);
   });
 });
 
-describe("validateBank", () => {
-  it("真题库 loadQuizBank() 通过校验，不抛错", () => {
-    const bank = loadQuizBank();
-    expect(() => validateBank(bank)).not.toThrow();
-  });
-});
-
-describe("sampleQuestions", () => {
-  it("perDimension=2 返回 8 题，按 4 维度顺序", () => {
-    const bank = loadQuizBank();
-    const sampled = sampleQuestions(bank, 2);
-    expect(sampled).toHaveLength(8);
-
-    // 每两题一组应该按 DIMENSION_ORDER 顺序：personality / workstyle / value / direction
-    expect(sampled[0].dimension).toBe("personality");
-    expect(sampled[1].dimension).toBe("personality");
-    expect(sampled[2].dimension).toBe("workstyle");
-    expect(sampled[3].dimension).toBe("workstyle");
-    expect(sampled[4].dimension).toBe("value");
-    expect(sampled[5].dimension).toBe("value");
-    expect(sampled[6].dimension).toBe("direction");
-    expect(sampled[7].dimension).toBe("direction");
-  });
-
-  it("抽样均匀性：100 次后每题都至少被抽中过，粗略均匀（最大/最小 ≤ 3 倍）", () => {
-    const bank = loadQuizBank();
-    const counts = new Map<string, number>();
-
-    for (let i = 0; i < 100; i++) {
-      const sampled = sampleQuestions(bank, 2);
-      for (const q of sampled) {
-        counts.set(q.id, (counts.get(q.id) ?? 0) + 1);
-      }
+describe("getFixedQuestions", () => {
+  it("返回数组，每题有 id / text / options", () => {
+    const questions = getFixedQuestions();
+    expect(Array.isArray(questions)).toBe(true);
+    expect(questions.length).toBeGreaterThanOrEqual(1);
+    for (const q of questions) {
+      expect(typeof q.id).toBe("string");
+      expect(typeof q.text).toBe("string");
+      expect(Array.isArray(q.options)).toBe(true);
     }
+  });
 
-    // 每维 6 题、每次抽 2 题、跑 100 次：每题理论被抽中 ~33 次
-    // 100 次样本量小，方差可能较大，宽松到 3 倍以避免抖测
-    for (const dim of bank.dimensions) {
-      const dimCounts = dim.questions.map((q) => counts.get(q.id) ?? 0);
-      const min = Math.min(...dimCounts);
-      const max = Math.max(...dimCounts);
-      // 全部题目都应被至少抽中过
-      expect(min).toBeGreaterThan(0);
-      // 最大不超过最小的 3 倍（粗略均匀，允许随机波动）
-      expect(max).toBeLessThanOrEqual(min * 3);
+  it("SJT-01 有 4 个选项 A/B/C/D", () => {
+    const questions = getFixedQuestions();
+    const q1 = questions[0];
+    expect(q1.id).toBe("SJT-01");
+    expect(q1.options).toHaveLength(4);
+    const labels = q1.options.map((o) => o.label);
+    expect(labels).toContain("A");
+    expect(labels).toContain("B");
+    expect(labels).toContain("C");
+    expect(labels).toContain("D");
+  });
+
+  it("每个选项有 text 和 weights（至少 1 个能力 key）", () => {
+    const questions = getFixedQuestions();
+    for (const q of questions) {
+      for (const opt of q.options) {
+        expect(typeof opt.text).toBe("string");
+        expect(opt.text.length).toBeGreaterThan(5);
+        expect(typeof opt.weights).toBe("object");
+        // SJT 选项稀疏矩阵：每个选项有 1-2 个 ability key
+        const weightKeys = Object.keys(opt.weights);
+        expect(weightKeys.length).toBeGreaterThanOrEqual(1);
+        for (const [, v] of Object.entries(opt.weights)) {
+          expect(typeof v).toBe("number");
+          expect(v).toBeGreaterThan(0);
+          expect(v).toBeLessThanOrEqual(1.0);
+        }
+      }
     }
   });
 });

@@ -62,10 +62,10 @@ export function buildBaseContext(
   ];
 
   if (quizAnswers && quizAnswers.length > 0) {
-    parts.push("\n职业偏好量表结果：");
+    parts.push("\n职业偏好量表结果（情境判断题）：");
     for (const ans of quizAnswers) {
       parts.push(
-        `- [${ans.dimension}] 题目 ${ans.questionId} → 评分 ${ans.raw}`
+        `- 题目 ${ans.questionId} → 选项 ${ans.selectedLabel}`
       );
     }
   }

@@ -89,7 +89,7 @@ export async function renderPdfBuffer(reportData: ReportData): Promise<Buffer> {
       headerTemplate: `<div></div>`,
       footerTemplate: `
         <div style="width:100%; padding:0 10mm; font-size:9px; color:#6b7280; display:flex; justify-content:space-between; font-family:'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif;">
-          <span>谨世 ATA · 职业定位报告</span>
+          <span>谨世 ATA · 职业导航报告</span>
           <span>第 <span class="pageNumber"></span> / <span class="totalPages"></span> 页</span>
         </div>
       `,

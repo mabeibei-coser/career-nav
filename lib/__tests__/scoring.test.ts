@@ -1,194 +1,173 @@
 import { describe, it, expect } from "vitest";
 import { scoreQuiz } from "../scoring";
-import type { QuizBank, QuizAnswer } from "../types";
+import type { QuizQuestion, QuizAnswer } from "../types";
 
-// 构造一个 mock 题库，覆盖 4 维度，含正向题、反向题、有/无 ability 权重的题
-function makeMockBank(): QuizBank {
-  return {
-    version: "test",
-    dimensions: [
-      {
-        key: "personality",
-        name: "性格底色",
-        questions: [
-          {
-            id: "P-01",
-            dimension: "personality",
-            text: "正向题，给 communication 加权",
-            reverse: false,
-            weights: { communication: 1.0 },
-          },
-          {
-            id: "P-02",
-            dimension: "personality",
-            text: "反向题",
-            reverse: true,
-            weights: { collaboration: 1.0 },
-          },
-        ],
-      },
-      {
-        key: "workstyle",
-        name: "工作风格",
-        questions: [
-          {
-            id: "W-01",
-            dimension: "workstyle",
-            text: "正向题，给 execution 加权",
-            reverse: false,
-            weights: { execution: 1.0 },
-          },
-          {
-            id: "W-02",
-            dimension: "workstyle",
-            text: "正向题，给 learning 加权",
-            reverse: false,
-            weights: { learning: 1.0 },
-          },
-        ],
-      },
-      {
-        key: "value",
-        name: "价值驱动",
-        questions: [
-          {
-            // value 维度有题但 weights 完全空，专门测 ability 无贡献场景
-            id: "V-01",
-            dimension: "value",
-            text: "无 ability 权重",
-            reverse: false,
-            weights: {},
-          },
-          {
-            id: "V-02",
-            dimension: "value",
-            text: "无 ability 权重",
-            reverse: false,
-            weights: {},
-          },
-        ],
-      },
-      {
-        key: "direction",
-        name: "适配方向",
-        questions: [
-          {
-            id: "D-01",
-            dimension: "direction",
-            text: "给 data 加权",
-            reverse: false,
-            weights: { data: 1.0 },
-          },
-          {
-            id: "D-02",
-            dimension: "direction",
-            text: "给 stress 加权",
-            reverse: false,
-            weights: { stress: 1.0 },
-          },
-        ],
-      },
-    ],
-  };
+/** 构造覆盖 6 个能力维度的 mock 题库（2 题） */
+function makeMockQuestions(): QuizQuestion[] {
+  return [
+    {
+      id: "SJT-01",
+      text: "遇到陌生任务，你会怎么做？",
+      options: [
+        { label: "A", text: "边做边摸索", weights: { learning: 1.0, execution: 0.6 } },
+        { label: "B", text: "先列步骤", weights: { execution: 1.0, data: 0.6 } },
+        { label: "C", text: "找人请教", weights: { collaboration: 1.0, communication: 0.6 } },
+        { label: "D", text: "主动告知上级", weights: { communication: 0.9, stress: 0.5 } },
+      ],
+    },
+    {
+      id: "SJT-02",
+      text: "同时有三项任务，你怎么安排？",
+      options: [
+        { label: "A", text: "按紧急排序", weights: { execution: 1.0, stress: 0.5 } },
+        { label: "B", text: "估算工作量分时间块", weights: { execution: 0.9, data: 0.7 } },
+        { label: "C", text: "问哪项最优先", weights: { communication: 0.9, collaboration: 0.6 } },
+        { label: "D", text: "先做能快速完成的", weights: { execution: 0.8, learning: 0.4 } },
+      ],
+    },
+  ];
 }
 
-const ALL_QUESTION_IDS = [
-  "P-01",
-  "P-02",
-  "W-01",
-  "W-02",
-  "V-01",
-  "V-02",
-  "D-01",
-  "D-02",
-];
+describe("scoreQuiz (SJT sparse matrix)", () => {
+  it("t1: 两题都选 A → 能力得分能正确累计", () => {
+    const questions = makeMockQuestions();
+    const answers: QuizAnswer[] = [
+      { questionId: "SJT-01", selectedLabel: "A" },
+      { questionId: "SJT-02", selectedLabel: "A" },
+    ];
+    const result = scoreQuiz(answers, questions);
 
-function buildAnswers(
-  raw: 1 | 2 | 3 | 4 | 5,
-  ids: string[] = ALL_QUESTION_IDS,
-): QuizAnswer[] {
-  return ids.map((id) => {
-    let dim: QuizAnswer["dimension"] = "personality";
-    if (id.startsWith("W")) dim = "workstyle";
-    else if (id.startsWith("V")) dim = "value";
-    else if (id.startsWith("D")) dim = "direction";
-    return { questionId: id, dimension: dim, raw };
-  });
-}
-
-describe("scoreQuiz", () => {
-  it("t1: 全 raw=3 → 所有维度 score=50", () => {
-    const bank = makeMockBank();
-    const answers = buildAnswers(3);
-    const result = scoreQuiz(answers, bank);
-
+    // SJT-01 选 A: learning=1.0, execution=0.6
+    // SJT-02 选 A: execution=1.0, stress=0.5
+    // 所有维度得分应在 [0, 100]
     expect(result.fourDim).toHaveLength(4);
+    expect(result.ability).toHaveLength(6);
+    for (const d of result.fourDim) {
+      expect(d.score).toBeGreaterThanOrEqual(0);
+      expect(d.score).toBeLessThanOrEqual(100);
+    }
+    for (const a of result.ability) {
+      expect(a.score).toBeGreaterThanOrEqual(0);
+      expect(a.score).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it("t2: 单题选最高权重选项 → 对应能力得分 100", () => {
+    // 用单题、每能力只有一个选项有权重，使期望值可精确断言
+    const isolatedQ: QuizQuestion[] = [
+      {
+        id: "ISO-01",
+        text: "test",
+        options: [
+          { label: "A", text: "a", weights: { learning: 1.0 } },   // learning 最高
+          { label: "B", text: "b", weights: { execution: 1.0 } },   // execution 最高
+          { label: "C", text: "c", weights: { collaboration: 1.0 } },
+          { label: "D", text: "d", weights: { stress: 1.0 } },
+        ],
+      },
+    ];
+
+    // 选 A → learning 应得 100（achieved=1.0, maxPossible=1.0）
+    const answersA: QuizAnswer[] = [{ questionId: "ISO-01", selectedLabel: "A" }];
+    const resultA = scoreQuiz(answersA, isolatedQ);
+    const mapA = Object.fromEntries(resultA.ability.map((a) => [a.key, a.score]));
+    expect(mapA.learning).toBe(100);
+    // execution: max=1.0 (B), achieved=0 → score=0
+    expect(mapA.execution).toBe(0);
+
+    // 选 B → execution 应得 100
+    const answersB: QuizAnswer[] = [{ questionId: "ISO-01", selectedLabel: "B" }];
+    const resultB = scoreQuiz(answersB, isolatedQ);
+    const mapB = Object.fromEntries(resultB.ability.map((a) => [a.key, a.score]));
+    expect(mapB.execution).toBe(100);
+    expect(mapB.learning).toBe(0);
+  });
+
+  it("t3: 无任何题贡献某能力时得分 = 50（默认中性）", () => {
+    // 只有 SJT-01，选 B（execution+data），collaboration 无贡献
+    const singleQuestion: QuizQuestion[] = [makeMockQuestions()[0]];
+    const answers: QuizAnswer[] = [{ questionId: "SJT-01", selectedLabel: "B" }];
+    const result = scoreQuiz(answers, singleQuestion);
+
+    const abilityMap = Object.fromEntries(result.ability.map((a) => [a.key, a.score]));
+    // SJT-01 选项里 collaboration 没有最高权重?
+    // A=communication:0.6,collaboration:0, B=communication:0,collaboration:0
+    // C=collaboration:1.0, D=communication:0.9
+    // 所以 max collaboration for SJT-01 = 1.0 (from C)
+    // selected B: weights.collaboration = undefined = 0
+    // achieved=0, maxPossible=1.0 → score = 0? No, score = (0/1.0)*100 = 0
+    // But wait, stress doesn't appear in SJT-01 options at all except D (stress:0.5)
+    // Actually let me recalculate. D has stress:0.5, so maxPossible.stress = 0.5
+    // Selected B has stress:0 → achieved=0/0.5*100 = 0. Not 50.
+    // The 50 default only applies if NO option in ANY question contributes to the ability
+    // In this case stress DOES have max=0.5, so it's not "no contribution"
+    // Let me test collaboration specifically with questions where NO option has collaboration weight
+
+    const noCollabQuestions: QuizQuestion[] = [
+      {
+        id: "NC-01",
+        text: "test",
+        options: [
+          { label: "A", text: "a", weights: { execution: 1.0 } },
+          { label: "B", text: "b", weights: { learning: 1.0 } },
+          { label: "C", text: "c", weights: { data: 1.0 } },
+          { label: "D", text: "d", weights: { stress: 1.0 } },
+        ],
+      },
+    ];
+    const answersNC: QuizAnswer[] = [{ questionId: "NC-01", selectedLabel: "A" }];
+    const resultNC = scoreQuiz(answersNC, noCollabQuestions);
+    const abilityMapNC = Object.fromEntries(resultNC.ability.map((a) => [a.key, a.score]));
+
+    // collaboration 和 communication 在 noCollabQuestions 中没有任何选项有权重
+    expect(abilityMapNC.collaboration).toBe(50);
+    expect(abilityMapNC.communication).toBe(50);
+  });
+
+  it("t4: 不存在的 questionId 跳过不报错", () => {
+    const questions = makeMockQuestions();
+    const answers: QuizAnswer[] = [
+      { questionId: "NOT-EXIST", selectedLabel: "A" },
+      { questionId: "SJT-01", selectedLabel: "C" },
+    ];
+    expect(() => scoreQuiz(answers, questions)).not.toThrow();
+    const result = scoreQuiz(answers, questions);
+    // SJT-01 选 C: collaboration=1.0, communication=0.6
+    const abilityMap = Object.fromEntries(result.ability.map((a) => [a.key, a.score]));
+    expect(abilityMap.collaboration).toBe(100); // max=1.0, achieved=1.0
+  });
+
+  it("t5: 四维雷达从能力分正确推导", () => {
+    // 构造一组使能力分可预期的答题
+    const questions = makeMockQuestions();
+    const answers: QuizAnswer[] = [
+      { questionId: "SJT-01", selectedLabel: "C" }, // collaboration=1.0, communication=0.6
+      { questionId: "SJT-02", selectedLabel: "C" }, // communication=0.9, collaboration=0.6
+    ];
+    const result = scoreQuiz(answers, questions);
+
+    // personality = avg(communication, collaboration)
+    const abilityMap = Object.fromEntries(result.ability.map((a) => [a.key, a.score]));
+    const dimMap = Object.fromEntries(result.fourDim.map((d) => [d.dimension, d.score]));
+
+    const expectedPersonality = Math.round((abilityMap.communication + abilityMap.collaboration) / 2);
+    expect(dimMap.personality).toBe(expectedPersonality);
+
+    // 所有维度有名字
+    for (const d of result.fourDim) {
+      expect(d.name).toBeTruthy();
+    }
+  });
+
+  it("t6: 空答案数组返回全 50 分（无贡献默认中性）", () => {
+    const questions = makeMockQuestions();
+    const result = scoreQuiz([], questions);
+    for (const a of result.ability) {
+      expect(a.score).toBe(50);
+    }
+    // 维度分 = avg(50, 50) = 50
     for (const d of result.fourDim) {
       expect(d.score).toBe(50);
     }
-  });
-
-  it("t2: 反向题 raw=1, reverse=true → 维度 score=100", () => {
-    const bank = makeMockBank();
-    // 只回答 P-02（反向题），raw=1 → 反向后 score=5 → 维度均值 5 → 维度分 100
-    const answers: QuizAnswer[] = [
-      { questionId: "P-02", dimension: "personality", raw: 1 },
-    ];
-    const result = scoreQuiz(answers, bank);
-    const personality = result.fourDim.find((d) => d.dimension === "personality");
-    expect(personality).toBeDefined();
-    expect(personality!.score).toBe(100);
-  });
-
-  it("t3: ability 无任何题贡献 weight → 默认 50（不 NaN）", () => {
-    const bank = makeMockBank();
-    // 只回答 V-01 和 V-02（weights 空），不会给任何 ability 加权
-    const answers: QuizAnswer[] = [
-      { questionId: "V-01", dimension: "value", raw: 5 },
-      { questionId: "V-02", dimension: "value", raw: 5 },
-    ];
-    const result = scoreQuiz(answers, bank);
-    for (const a of result.ability) {
-      expect(Number.isFinite(a.score)).toBe(true);
-      expect(a.score).toBe(50);
-    }
-  });
-
-  it("t4: 全 raw=5 + 无反向 → 维度/ability 接近 100", () => {
-    // 跳过反向题 P-02 以避免反向后压低均值
-    const ids = ALL_QUESTION_IDS.filter((id) => id !== "P-02");
-    const bank = makeMockBank();
-    const answers = buildAnswers(5, ids);
-    const result = scoreQuiz(answers, bank);
-
-    // 维度：personality 只剩 P-01（正向 raw=5），其他维度全是正向 raw=5
-    for (const d of result.fourDim) {
-      expect(d.score).toBe(100);
-    }
-
-    // ability：communication / execution / learning / data / stress 都该接近 100
-    // collaboration 没题贡献（P-02 被排除），按 t3 逻辑等于 50
-    const abilityMap = Object.fromEntries(
-      result.ability.map((a) => [a.key, a.score]),
-    );
-    expect(abilityMap.communication).toBe(100);
-    expect(abilityMap.execution).toBe(100);
-    expect(abilityMap.learning).toBe(100);
-    expect(abilityMap.data).toBe(100);
-    expect(abilityMap.stress).toBe(100);
-    expect(abilityMap.collaboration).toBe(50);
-  });
-
-  it("t5: 不存在的 questionId 跳过不报错", () => {
-    const bank = makeMockBank();
-    const answers: QuizAnswer[] = [
-      { questionId: "NOT-EXIST", dimension: "personality", raw: 5 },
-      { questionId: "P-01", dimension: "personality", raw: 3 },
-    ];
-    expect(() => scoreQuiz(answers, bank)).not.toThrow();
-    const result = scoreQuiz(answers, bank);
-    // P-01 raw=3 → 维度均值 3 → score 50
-    const personality = result.fourDim.find((d) => d.dimension === "personality");
-    expect(personality!.score).toBe(50);
   });
 });

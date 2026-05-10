@@ -39,30 +39,28 @@ export const ABILITY_NAMES: Record<AbilityKey, string> = {
   stress: "压力适应",
 };
 
-export interface QuizQuestion {
-  id: string;
-  dimension: QuizDimension;
+// 情境判断题（SJT）选项
+export interface QuizOption {
+  label: "A" | "B" | "C" | "D";
   text: string;
-  reverse: boolean;
-  weights: Partial<Record<AbilityKey, number>>;
-  context?: "all" | "grad" | "work"; // 身份适配：all=所有身份, grad=应届/离校, work=有工作经历
+  weights: Partial<Record<AbilityKey, number>>; // 稀疏矩阵：每个选项覆盖 1-2 个能力维度，值域 0-1
 }
 
-export interface QuizBankDimension {
-  key: QuizDimension;
-  name: string;
-  questions: QuizQuestion[];
+// 情境判断题
+export interface QuizQuestion {
+  id: string;
+  text: string; // 情境描述
+  options: QuizOption[]; // 固定 4 个选项（A/B/C/D）
 }
 
 export interface QuizBank {
   version: string;
-  dimensions: QuizBankDimension[];
+  fixedQuestions: QuizQuestion[]; // 固定题目（SJT-01 = Q1）
 }
 
 export interface QuizAnswer {
   questionId: string;
-  dimension: QuizDimension;
-  raw: 1 | 2 | 3 | 4 | 5;
+  selectedLabel: "A" | "B" | "C" | "D"; // 用户选择的选项标签
 }
 
 export interface DimensionScore {
