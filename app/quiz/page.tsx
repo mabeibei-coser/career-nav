@@ -15,6 +15,9 @@ const cubicEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 const AUTO_NEXT_DELAY_MS = 400;
 
+/** 期望的总题数：Q1 固定 + Q2-Q8 LLM 生成 */
+const EXPECTED_TOTAL = 8;
+
 /** 选项标签显示样式 */
 const OPTION_LABEL_COLORS: Record<"A" | "B" | "C" | "D", string> = {
   A: "bg-blue-100 text-blue-700",
@@ -56,16 +59,26 @@ export default function QuizPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** Q2-Q8 是否还在 LLM 后台生成（用户可能已开始答 Q1） */
+  const [generating, setGenerating] = useState(false);
+  /** Q2-Q8 生成失败的错误信息（不阻塞 Q1 答题） */
+  const [generatedError, setGeneratedError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const autoNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 拉题（POST /api/quiz/bank，携带完整 formData 做个性化生成）
-  const fetchBank = useCallback(async (fd: JobFormData) => {
-    setLoading(true);
-    setLoadError(null);
+  /**
+   * 分两阶段拉题：
+   * 1. GET /api/quiz/bank/q1 → 毫秒级拿 Q1 立即显示
+   * 2. POST /api/quiz/bank/generated → 后台 5-15s 生成 Q2-Q8
+   *
+   * 用户在做 Q1 时 LLM 在后台生成，避免开屏白屏 5-15 秒。
+   */
+  const fetchGenerated = useCallback(async (fd: JobFormData, q1: QuizQuestion) => {
+    setGenerating(true);
+    setGeneratedError(null);
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/quiz/bank`,
+        `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/quiz/bank/generated`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -74,7 +87,7 @@ export default function QuizPage() {
         },
       );
       if (!res.ok) {
-        let msg = `题目加载失败（HTTP ${res.status}）`;
+        let msg = `剩余题目生成失败（HTTP ${res.status}）`;
         try {
           const data = await res.json();
           if (data?.errorMessage) msg = data.errorMessage;
@@ -82,21 +95,62 @@ export default function QuizPage() {
         throw new Error(msg);
       }
       const data = await res.json();
-      const list = (data?.questions ?? []) as QuizQuestion[];
-      if (!Array.isArray(list) || list.length === 0) {
-        throw new Error("测评题目返回为空，请稍后重试");
+      const generated = (data?.questions ?? []) as QuizQuestion[];
+      if (!Array.isArray(generated) || generated.length === 0) {
+        throw new Error("剩余题目返回为空");
       }
-      setQuestions(list);
-      // 题目也存一份到 sessionStorage，方便 handleSubmit 在极端情况下访问
+      const fullList = [q1, ...generated];
+      setQuestions(fullList);
       try {
-        sessionStorage.setItem("quizQuestions", JSON.stringify(list));
+        sessionStorage.setItem("quizQuestions", JSON.stringify(fullList));
       } catch {}
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "题目加载失败");
+      setGeneratedError(e instanceof Error ? e.message : "剩余题目生成失败");
     } finally {
-      setLoading(false);
+      setGenerating(false);
     }
   }, []);
+
+  const fetchBank = useCallback(
+    async (fd: JobFormData) => {
+      setLoading(true);
+      setLoadError(null);
+      setGeneratedError(null);
+      // 1. 立即拉 Q1（毫秒级）
+      let q1: QuizQuestion;
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/quiz/bank/q1`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) {
+          let msg = `题目加载失败（HTTP ${res.status}）`;
+          try {
+            const data = await res.json();
+            if (data?.errorMessage) msg = data.errorMessage;
+          } catch {}
+          throw new Error(msg);
+        }
+        const data = await res.json();
+        q1 = data?.question as QuizQuestion;
+        if (!q1 || !q1.id) throw new Error("固定题返回为空");
+      } catch (e) {
+        setLoadError(e instanceof Error ? e.message : "题目加载失败");
+        setLoading(false);
+        return;
+      }
+
+      setQuestions([q1]);
+      try {
+        sessionStorage.setItem("quizQuestions", JSON.stringify([q1]));
+      } catch {}
+      setLoading(false);
+
+      // 2. 后台拉 Q2-Q8（不阻塞 UI）
+      void fetchGenerated(fd, q1);
+    },
+    [fetchGenerated],
+  );
 
   // mount: 校验 formData → 拉题
   useEffect(() => {
@@ -123,12 +177,21 @@ export default function QuizPage() {
   }, []);
 
   const currentQ = questions[currentIndex];
-  const total = questions.length;
-  const isLast = total > 0 && currentIndex === total - 1;
+  /** 实际已加载题数（可能 1 也可能 8） */
+  const loadedTotal = questions.length;
+  /** 用户感知的总题数：固定为 EXPECTED_TOTAL 让进度条稳定 */
+  const total = EXPECTED_TOTAL;
+  /** 是否是最后一题（必须 8 题全到位且 currentIndex=7） */
+  const isLast = loadedTotal === EXPECTED_TOTAL && currentIndex === EXPECTED_TOTAL - 1;
+  /** 是否在 Q1（此时即使 generating 也允许答题） */
+  const isFirst = currentIndex === 0;
+  /** 是否需要等待 Q2-Q8 加载（用户答完 Q1 但 generated 还没回来） */
+  const needsWaitNext = !isLast && currentIndex >= loadedTotal - 1 && generating;
   const selectedLabel = currentQ ? answers[currentQ.id] : undefined;
   const answeredCount = Object.keys(answers).length;
-  const allAnswered = total > 0 && questions.every((q) => answers[q.id]);
-  const progressPct = total > 0 ? ((currentIndex + 1) / total) * 100 : 0;
+  const allAnswered =
+    loadedTotal === EXPECTED_TOTAL && questions.every((q) => answers[q.id]);
+  const progressPct = ((currentIndex + 1) / total) * 100;
 
   const persistAnswers = useCallback(
     (map: AnswerMap, qs: QuizQuestion[]): QuizAnswer[] => {
@@ -156,7 +219,10 @@ export default function QuizPage() {
     if (autoNextTimerRef.current) clearTimeout(autoNextTimerRef.current);
     if (!isLast) {
       autoNextTimerRef.current = setTimeout(() => {
-        setCurrentIndex((idx) => Math.min(idx + 1, total - 1));
+        // 只在下一题已加载时跳转；否则原地等（needsWaitNext 会显示加载提示）
+        setCurrentIndex((idx) =>
+          idx + 1 < loadedTotal ? idx + 1 : idx,
+        );
       }, AUTO_NEXT_DELAY_MS);
     }
   };
@@ -168,7 +234,10 @@ export default function QuizPage() {
 
   const goNext = () => {
     if (autoNextTimerRef.current) clearTimeout(autoNextTimerRef.current);
-    if (currentIndex < total - 1) setCurrentIndex(currentIndex + 1);
+    // 下一题尚未加载时不可跳
+    if (currentIndex + 1 < loadedTotal) {
+      setCurrentIndex(currentIndex + 1);
+    }
   };
 
   const handleSubmit = () => {
@@ -192,14 +261,15 @@ export default function QuizPage() {
   };
 
   // ===== Loading / Error 渲染 =====
+  // 此 loading 只覆盖 Q1 的拉取（毫秒级），Q2-Q8 在后台异步生成
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--blue-50)] via-white to-[var(--blue-100)] px-6">
         <div className="flex flex-col items-center gap-4 text-[var(--muted-foreground)]">
           <Loader2 className="size-8 animate-spin text-[var(--blue-500)]" />
           <div className="text-sm text-center">
-            <p className="font-medium text-[var(--navy-800)]">正在为你生成专属测评题目</p>
-            <p className="text-xs mt-1 text-[var(--muted-foreground)]">根据你的背景个性化定制，约需 5-15 秒</p>
+            <p className="font-medium text-[var(--navy-800)]">即将开始测评</p>
+            <p className="text-xs mt-1 text-[var(--muted-foreground)]">正在准备第一题…</p>
           </div>
         </div>
       </div>
@@ -364,10 +434,17 @@ export default function QuizPage() {
               <Button
                 type="button"
                 onClick={goNext}
-                disabled={!selectedLabel || submitting}
+                disabled={!selectedLabel || submitting || needsWaitNext}
                 className="h-11 px-6 bg-[var(--blue-500)] hover:bg-[var(--blue-600)]"
               >
-                下一题
+                {needsWaitNext ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin mr-2" />
+                    等待出题
+                  </>
+                ) : (
+                  "下一题"
+                )}
               </Button>
             ) : (
               <Button
@@ -388,6 +465,31 @@ export default function QuizPage() {
             )}
           </div>
         </div>
+
+        {/* 剩余题目生成状态提示（非阻塞）*/}
+        {generating && isFirst && (
+          <div className="mt-4 flex items-center justify-center gap-2 text-xs text-[var(--muted-foreground)]">
+            <Loader2 className="size-3.5 animate-spin text-[var(--blue-500)]" />
+            <span>正在为你定制剩余 7 道题，请先答第 1 题…</span>
+          </div>
+        )}
+        {generatedError && !generating && (
+          <div className="mt-4 flex flex-col items-center gap-2 rounded-lg border border-amber-300/60 bg-amber-50/70 px-4 py-3 text-xs text-amber-900">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="size-4" />
+              <span>剩余题目生成失败：{generatedError}</span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() => formData && currentQ && void fetchGenerated(formData, questions[0])}
+            >
+              重新生成
+            </Button>
+          </div>
+        )}
 
         {/* Tips */}
         <p className="text-center text-xs text-[var(--muted-foreground)] mt-6 leading-relaxed">
