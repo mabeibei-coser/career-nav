@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Download, Loader2, Printer, RefreshCw, RotateCw } from "lucide-react";
+import { Download, Loader2, RotateCw, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ReportData } from "@/lib/types";
 
@@ -14,15 +14,32 @@ interface ExportActionsProps {
 
 type PdfStatus = "preparing" | "ready" | "downloading" | "error";
 
+const CONTACT_TEXT =
+  "如您有进一步服务需求，可致电 63011095、63137613，或前往黄浦区中山南一路555号线下咨询。";
+
+function formatGeneratedAt(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    const h = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${y}年${m}月${day}日 ${h}:${min}`;
+  } catch {
+    return dateStr;
+  }
+}
+
 export function ExportActions({
   report,
   onExportingChange,
-  onNewAnalysis,
 }: ExportActionsProps) {
   const [pdfStatus, setPdfStatus] = React.useState<PdfStatus>("preparing");
   const [pdfToken, setPdfToken] = React.useState<string | null>(null);
   const [pdfError, setPdfError] = React.useState<string | null>(null);
   const [prepEpoch, setPrepEpoch] = React.useState(0);
+  const [showContact, setShowContact] = React.useState(false);
   const cancelledRef = React.useRef(false);
 
   // mount 时自动 POST /prepare 拿 token（服务端 fire-and-forget 启动 Puppeteer 渲染）
@@ -65,13 +82,8 @@ export function ExportActions({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prepEpoch, report]);
 
-  const handlePrint = () => {
-    if (typeof window !== "undefined") window.print();
-  };
-
   const handleDownload = () => {
     if (pdfStatus === "error") {
-      // 重试
       setPrepEpoch((n) => n + 1);
       return;
     }
@@ -81,15 +93,11 @@ export function ExportActions({
     onExportingChange?.(true);
 
     const url = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/pdf?token=${encodeURIComponent(pdfToken)}`;
-
-    // 同步打开新窗口（token 已有，window.open 在用户手势内）
     const popup = window.open(url, "_blank");
     if (!popup || popup.closed) {
-      // popup 被拦截 fallback：Content-Disposition: attachment 触发下载
       window.location.href = url;
     }
 
-    // 恢复按钮状态
     setTimeout(() => {
       if (!cancelledRef.current) {
         setPdfStatus("ready");
@@ -102,31 +110,34 @@ export function ExportActions({
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--blue-100)] bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 print:hidden pb-[env(safe-area-inset-bottom)]">
+      {/* 预约服务展开信息 */}
+      {showContact && (
+        <div className="max-w-5xl mx-auto px-4 pt-3 pb-1 sm:px-6">
+          <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+            <Phone className="size-4 text-blue-600 mt-0.5 shrink-0" />
+            <p className="text-[13px] leading-[1.6] text-blue-800">{CONTACT_TEXT}</p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
         <div className="min-w-0 flex-1 text-xs text-[var(--muted-foreground)] truncate">
-          生成时间：{new Date(report.meta.generatedAt).toLocaleString("zh-CN")}
+          生成时间：{formatGeneratedAt(report.meta.generatedAt)}
         </div>
         <div className="flex items-center gap-2">
+          {/* 预约服务 */}
           <Button
             type="button"
             variant="outline"
             size="sm"
             className="h-10 sm:h-9 min-h-[44px] sm:min-h-0"
-            onClick={onNewAnalysis}
+            onClick={() => setShowContact((v) => !v)}
           >
-            <RefreshCw className="size-4" />
-            <span className="hidden sm:inline ml-1">重新分析</span>
+            <Phone className="size-4" />
+            <span className="ml-1">预约服务</span>
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-10 sm:h-9 min-h-[44px] sm:min-h-0"
-            onClick={handlePrint}
-          >
-            <Printer className="size-4" />
-            <span className="hidden sm:inline ml-1">打印</span>
-          </Button>
+
+          {/* 下载 PDF */}
           <Button
             type="button"
             size="sm"

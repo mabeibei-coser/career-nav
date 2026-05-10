@@ -178,27 +178,6 @@ function PositionCard({
         </div>
       )}
 
-      {/* culture + teamRole */}
-      {(rec.culture || rec.teamRole) && (
-        <div className="space-y-2 pt-3 border-t border-[var(--report-divider,rgba(15,23,42,0.06))]">
-          {rec.culture && (
-            <div className="flex gap-2 text-[13px] leading-[1.6]">
-              <span className="shrink-0 w-[64px] text-[var(--report-ink-muted)] font-medium">
-                企业文化
-              </span>
-              <span className="text-[var(--navy-800)]">{rec.culture}</span>
-            </div>
-          )}
-          {rec.teamRole && (
-            <div className="flex gap-2 text-[13px] leading-[1.6]">
-              <span className="shrink-0 w-[64px] text-[var(--report-ink-muted)] font-medium">
-                团队角色
-              </span>
-              <span className="text-[var(--navy-800)]">{rec.teamRole}</span>
-            </div>
-          )}
-        </div>
-      )}
     </Wrapper>
   );
 }

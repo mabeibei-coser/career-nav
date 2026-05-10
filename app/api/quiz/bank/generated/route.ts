@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateSJTQuestions, FALLBACK_GENERATED } from "@/lib/quiz-generate";
+import { FALLBACK_GENERATED } from "@/lib/quiz-generate";
 import type { JobFormData } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -23,29 +23,13 @@ export async function POST(req: NextRequest) {
       // body 解析失败，使用默认
     }
 
-    // E2E Mock 模式：直接返回兜底题
-    if (process.env.E2E_MOCK_MODE === "true") {
-      return NextResponse.json(
-        { questions: FALLBACK_GENERATED, version: "mock" },
-        { headers: { "Cache-Control": "no-store" } },
-      );
-    }
-
-    let generatedQuestions;
-    try {
-      generatedQuestions = await generateSJTQuestions(formData);
-    } catch (llmErr) {
-      console.warn(
-        "[quiz/bank/generated] LLM 生成失败，使用兜底题：",
-        llmErr instanceof Error ? llmErr.message : llmErr,
-      );
-      generatedQuestions = FALLBACK_GENERATED;
-    }
-
+    // 使用静态兜底题：毫秒级返回，避免 LLM 生成 5-15s 的白屏等待。
+    // SJT 兜底题覆盖 6 个能力维度，评分权重完整，足以支撑报告生成。
+    // 若未来需要个性化生成，可在此处按 identity 分流再开 LLM 调用。
     return NextResponse.json(
       {
-        questions: generatedQuestions,
-        version: new Date().toISOString().slice(0, 10),
+        questions: FALLBACK_GENERATED,
+        version: "static",
       },
       { headers: { "Cache-Control": "no-store" } },
     );

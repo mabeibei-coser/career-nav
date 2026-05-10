@@ -108,6 +108,10 @@ export default function InterviewPage() {
   const [voiceSupported, setVoiceSupported] = useState(true);
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  /** TTS 就绪信号：触发 auto-play useEffect */
+  const [greetingTTSReady, setGreetingTTSReady] = useState(false);
+  /** 问候语正在播放中（用于 UI 状态） */
+  const [greetingPlaying, setGreetingPlaying] = useState(false);
 
   // 持有 form/scoring/quizAnswers，触发 startAfterQ3 时不再读 sessionStorage
   const formDataRef = useRef<JobFormData | null>(null);
@@ -208,7 +212,10 @@ export default function InterviewPage() {
     })
       .then((r) => r.json() as Promise<{ audioBase64?: string }>)
       .then((data) => {
-        if (data?.audioBase64) greetingAudioRef.current = data.audioBase64;
+        if (data?.audioBase64) {
+          greetingAudioRef.current = data.audioBase64;
+          setGreetingTTSReady(true); // 触发 auto-play effect
+        }
       })
       .catch(() => {}); // 失败静默降级，不影响主流程
 
@@ -309,6 +316,28 @@ export default function InterviewPage() {
     [player, setPhaseSync],
   );
 
+  // ---------- 问候语 TTS 就绪时自动播放（无需用户点击按钮） ----------
+  // presentQuestion 和 player 在此 effect 之前已声明，所以可以安全引用
+
+  useEffect(() => {
+    if (!greetingTTSReady || phaseRef.current !== "greeting") return;
+    const audio = greetingAudioRef.current;
+    if (!audio) return;
+    setGreetingTTSReady(false);
+    setGreetingPlaying(true);
+    afterGreetingRef.current = () => {
+      setGreetingPlaying(false);
+      // 问候语结束后自动进入 Q1
+      if (questionsRef.current.length < TOTAL_QUESTIONS) {
+        setPhaseSync("loading-q");
+      } else {
+        setCurrentIndex(0);
+        presentQuestion(questionsRef.current[0]);
+      }
+    };
+    player.play(audio);
+  }, [greetingTTSReady, presentQuestion, player, setPhaseSync]);
+
   // ---------- 进入下一题 ----------
 
   const advanceTo = useCallback(
@@ -352,16 +381,23 @@ export default function InterviewPage() {
       presentQuestion(questionsRef.current[0]);
     };
 
-    // 如果问候语音频已准备好，先播放问候语再进入 Q1
+    // 如果问候语正在自动播放（auto-play effect 已触发），忽略重复点击
+    if (greetingPlaying) return;
+
+    // 如果问候语音频已准备好但尚未播放，先播放问候语再进入 Q1
     if (greetingAudioRef.current) {
-      afterGreetingRef.current = proceedToQ1;
+      setGreetingPlaying(true);
+      afterGreetingRef.current = () => {
+        setGreetingPlaying(false);
+        proceedToQ1();
+      };
       player.play(greetingAudioRef.current);
       return;
     }
 
-    // 问候语音频尚未就绪（TTS 还在请求中）→ 直接进 Q1（降级）
+    // 音频尚未就绪（TTS 还在请求中）→ 直接进 Q1（降级）
     proceedToQ1();
-  }, [setPhaseSync, presentQuestion, player]);
+  }, [setPhaseSync, presentQuestion, player, greetingPlaying]);
 
   // 题目就绪后，如果当前还在 loading-q，自动朗读第一题
   useEffect(() => {
@@ -732,21 +768,33 @@ export default function InterviewPage() {
         <div className="w-full flex flex-col items-center gap-2 min-h-[100px]">
           <AnimatePresence mode="wait">
             {(phase === "greeting" || phase === "idle") && (
-              <motion.button
-                key="start-btn"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                onClick={handleStart}
-                className="px-7 py-3 text-white rounded-full text-sm font-medium shadow-lg active:scale-95 transition-all min-h-[44px]"
-                style={{
-                  background:
-                    "linear-gradient(135deg, #4f8cff 0%, #3b82f6 100%)",
-                  boxShadow: "0 4px 16px rgba(59,130,246,0.35)",
-                }}
-              >
-                准备好了，开始访谈
-              </motion.button>
+              greetingPlaying ? (
+                <motion.div
+                  key="greeting-speaking"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="text-[13px] text-slate-400 animate-pulse"
+                >
+                  AI 正在介绍，请稍候…
+                </motion.div>
+              ) : (
+                <motion.button
+                  key="start-btn"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  onClick={handleStart}
+                  className="px-7 py-3 text-white rounded-full text-sm font-medium shadow-lg active:scale-95 transition-all min-h-[44px]"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #4f8cff 0%, #3b82f6 100%)",
+                    boxShadow: "0 4px 16px rgba(59,130,246,0.35)",
+                  }}
+                >
+                  准备好了，开始访谈
+                </motion.button>
+              )
             )}
 
             {phase === "loading-q" && (
