@@ -12,10 +12,9 @@ import { useAudioRecorder } from "@/lib/hooks/use-audio-recorder";
 import { useAudioVisualizer } from "@/lib/hooks/use-audio-visualizer";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import { buildQ3Q4 } from "@/lib/interview-questions";
-import { startAfterQ1Q2 } from "@/lib/report-bg-runner";
+import { startAfterQ3 } from "@/lib/report-bg-runner";
 import type {
   InterviewAnswer,
-  InterviewQ1Q2,
   InterviewQuestion,
   JobFormData,
   QuizAnswer,
@@ -24,9 +23,8 @@ import type {
 
 // ---------- 状态机 ----------
 //
-// 4 题流程：Q1 / Q2（API 动态）→ 触发 startAfterQ1Q2 → Q3 / Q4（题库自抽，
-// 答案不入报告）→ /loading
-// Q3 进入前显示一次性"导语"提示用户"接下来 2 题不一定写进报告"。
+// 4 题流程：Q1 / Q2（API 动态）→ Q3（题库自抽，答案进报告）→ 触发 startAfterQ3
+// → Q4（题库自抽，答案不入报告，作为缓冲时间）→ /loading
 
 type Phase =
   | "init"
@@ -56,11 +54,16 @@ function canUseVoiceRecording(): boolean {
 const GREETING_TEXT =
   "你好，我是你的 AI 职业顾问，接下来我会问你 4 个问题，帮你完善这份定位报告。";
 
-// 用 4 题答案拼一个 raw "summary" 文本，作为 /loading 页的兜底
-// （只放 Q1Q2，Q3Q4 不入兜底——与 summarize API 行为一致）
+// 用 Q1/Q2/Q3 答案拼 raw "summary" 文本，作为 /loading 页的兜底
+// Q4 答案不入报告（仅为缓冲时间）
 function buildRawAnswersSummary(answers: InterviewAnswer[]): string {
   return answers
-    .filter((a) => a.questionId === "Q1" || a.questionId === "Q2")
+    .filter(
+      (a) =>
+        a.questionId === "Q1" ||
+        a.questionId === "Q2" ||
+        a.questionId === "Q3",
+    )
     .map(
       (a, i) =>
         `第${i + 1}问（${a.questionId}）：${a.text || "（未作答）"}`,
@@ -106,11 +109,11 @@ export default function InterviewPage() {
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
 
-  // 持有 form/scoring/quizAnswers，触发 startAfterQ1Q2 时不再读 sessionStorage
+  // 持有 form/scoring/quizAnswers，触发 startAfterQ3 时不再读 sessionStorage
   const formDataRef = useRef<JobFormData | null>(null);
   const scoringRef = useRef<ScoringResult | null>(null);
   const quizAnswersRef = useRef<QuizAnswer[]>([]);
-  const q1q2TriggeredRef = useRef(false);
+  const q3TriggeredRef = useRef(false);
   // questions 的最新值，给 handleStart 的轮询用（state closure 取不到最新）
   const questionsRef = useRef<InterviewQuestion[]>([]);
   // useEffect cleanup（网络监听）
@@ -415,20 +418,22 @@ export default function InterviewPage() {
     router.push("/loading");
   }, [router]);
 
-  // ---------- 触发后台 startAfterQ1Q2 ----------
+  // ---------- 触发后台 startAfterQ3（Q3 答完，携带 Q1+Q2+Q3 一次性启动全部 5 个报告模块） ----------
 
-  const triggerAfterQ1Q2 = useCallback(
-    (q1Text: string, q2Text: string) => {
-      if (q1q2TriggeredRef.current) return;
+  const triggerAfterQ3 = useCallback(
+    (q1Text: string, q2Text: string, q3Text: string) => {
+      if (q3TriggeredRef.current) return;
       const formData = formDataRef.current;
       const scoring = scoringRef.current;
       if (!formData || !scoring) return;
 
-      const interviewQ1Q2: InterviewQ1Q2 = {
+      const interviewQ1Q2 = {
         Q1: q1Text || undefined,
         Q2: q2Text || undefined,
+        Q3: q3Text || undefined,
       };
       try {
+        // 持久化到 sessionStorage，供 loading 页 consumeAll 现场 fetch 时使用
         sessionStorage.setItem(
           "interviewQ1Q2",
           JSON.stringify(interviewQ1Q2),
@@ -438,15 +443,15 @@ export default function InterviewPage() {
       }
 
       try {
-        startAfterQ1Q2({
+        startAfterQ3({
           formData,
           quizAnswers: quizAnswersRef.current,
           scoring,
           interviewQ1Q2,
         });
-        q1q2TriggeredRef.current = true;
+        q3TriggeredRef.current = true;
       } catch (e) {
-        console.warn("[interview] startAfterQ1Q2 failed (ignored):", e);
+        console.warn("[interview] startAfterQ3 failed (ignored):", e);
       }
     },
     // 全部依赖都是 ref，不需要在数组里
@@ -492,14 +497,15 @@ export default function InterviewPage() {
       setRecognizedText("");
       setTextInput("");
 
-      // Q1Q2 答完（即 currentIndex==1 答完，即将推进到 index=2 的 Q3）
-      // → 触发 startAfterQ1Q2
-      if (currentIndex === 1) {
+      // Q3 答完（即 currentIndex==2 答完，即将推进到 index=3 的 Q4）
+      // → 触发 startAfterQ3，携带 Q1+Q2+Q3 一次性启动全部 5 个报告模块
+      if (currentIndex === 2) {
         const q1Text =
           newAnswers.find((a) => a.questionId === "Q1")?.text ?? "";
         const q2Text =
           newAnswers.find((a) => a.questionId === "Q2")?.text ?? "";
-        triggerAfterQ1Q2(q1Text, q2Text);
+        const q3Text = finalText; // 当前确认的 Q3 答案
+        triggerAfterQ3(q1Text, q2Text, q3Text);
       }
 
       const nextIndex = currentIndex + 1;
@@ -515,7 +521,7 @@ export default function InterviewPage() {
       currentIndex,
       answers,
       recorder.durationSec,
-      triggerAfterQ1Q2,
+      triggerAfterQ3,
       advanceTo,
       finishAndGo,
     ],

@@ -1,14 +1,14 @@
 /**
  * Report 章节前端并发调度器（5 模块版）
  * ———————————————
- * career-nav 流程：form → quiz（评分）→ interview（Q1Q2 进报告，Q3Q4 占位）→ loading → report
+ * career-nav 流程：form → quiz（评分）→ interview（Q1/Q2/Q3 进报告，Q4 占位缓冲）→ loading → report
  * 5 模块依赖关系：
- *   - strength / positioning / advice：仅依赖 form + scoring（quiz 提交后即可启动）
- *   - overview / resumeDiagnosis：依赖 Q1Q2 访谈摘要（interview 页 Q1Q2 答完才启动）
+ *   全部 5 个模块统一在 interview Q3 答完后触发，携带 Q1+Q2+Q3 答案。
+ *   Q4 为等待缓冲，答案不入报告。
  * loading 页 mount 时调 consumeAll 一次性消费这 5 个 promise。
  *
- * 前面两批 fetch 在 react-bg-runner 里启动；本文件只负责调度时序常量和实际 fetch
- * 调用 + 容错（429/529 退避、mock fallback、onProgress 回调）。
+ * fetch 调度在 lib/report-bg-runner.ts 的 startAfterQ3 里启动；
+ * 本文件只负责调度时序常量和实际 fetch 调用 + 容错（429/529 退避、mock fallback、onProgress 回调）。
  */
 import type {
   Advice,
@@ -37,20 +37,19 @@ import { consumeBgSections, type BgSectionKey } from "@/lib/report-bg-runner";
 export const SECTION_CONFIG: {
   key: ReportSectionKey;
   endpoint: string;
-  trigger: "afterQuiz" | "afterQ1Q2";
+  trigger: "afterQ3";
   label: string;
   fallback: unknown;
 }[] = [
-  // afterQuiz：quiz 提交即可启动（仅依赖 form + scoring）
-  { key: "strength", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/strength`, trigger: "afterQuiz", label: "分析优势能力", fallback: MOCK_STRENGTH },
-  { key: "positioning", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/positioning`, trigger: "afterQuiz", label: "推荐适配岗位", fallback: MOCK_POSITIONING },
-  { key: "advice", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/advice`, trigger: "afterQuiz", label: "梳理行动建议", fallback: MOCK_ADVICE },
-  // afterQ1Q2：interview 页 Q1Q2 答完才能启动
-  { key: "overview", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/overview`, trigger: "afterQ1Q2", label: "绘制定位总览", fallback: MOCK_OVERVIEW },
-  { key: "resumeDiagnosis", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/resume-diagnosis`, trigger: "afterQ1Q2", label: "诊断简历改进点", fallback: MOCK_RESUME_DIAGNOSIS },
+  // 全部 5 个模块在 interview Q3 答完后统一触发，携带 Q1+Q2+Q3 答案
+  { key: "strength", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/strength`, trigger: "afterQ3", label: "分析优势能力", fallback: MOCK_STRENGTH },
+  { key: "positioning", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/positioning`, trigger: "afterQ3", label: "推荐适配岗位", fallback: MOCK_POSITIONING },
+  { key: "advice", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/advice`, trigger: "afterQ3", label: "梳理行动建议", fallback: MOCK_ADVICE },
+  { key: "overview", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/overview`, trigger: "afterQ3", label: "绘制定位总览", fallback: MOCK_OVERVIEW },
+  { key: "resumeDiagnosis", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/resume-diagnosis`, trigger: "afterQ3", label: "诊断简历改进点", fallback: MOCK_RESUME_DIAGNOSIS },
 ];
 
-export type Trigger = "afterQuiz" | "afterQ1Q2";
+export type Trigger = "afterQ3";
 export type SectionStatus = "pending" | "loading" | "completed" | "fallback" | "skipped";
 
 export interface SectionProgress {
@@ -132,23 +131,15 @@ export interface StartPayload {
   formData: JobFormData;
   quizAnswers: QuizAnswer[];
   scoring: ScoringResult;
-  interviewQ1Q2?: { Q1?: string; Q2?: string };
+  interviewQ1Q2?: { Q1?: string; Q2?: string; Q3?: string };
 }
 
 /**
- * quiz 提交后启动 trigger=afterQuiz 的 3 个 API（strength / positioning / advice）。
- * 返回每个 key 对应的 promise，由调用方（bg-runner）持有。
+ * interview 页 Q3 答完后调用：一次性启动全部 5 个模块，携带 Q1+Q2+Q3 答案。
+ * Q4 不触发报告，答案丢弃。
  */
-export function startAfterQuiz(payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
-  return startGroup("afterQuiz", payload);
-}
-
-/**
- * interview 页 Q1Q2 答完启动 trigger=afterQ1Q2 的 2 个 API（overview / resumeDiagnosis）。
- * Q1Q2 通过 interviewQ1Q2 传入。
- */
-export function startAfterQ1Q2(payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
-  return startGroup("afterQ1Q2", payload);
+export function startAfterQ3(payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
+  return startGroup("afterQ3", payload);
 }
 
 function startGroup(

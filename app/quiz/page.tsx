@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { StepIndicator } from "@/components/ui/step-indicator";
 import { cn } from "@/lib/utils";
 import { scoreQuiz } from "@/lib/scoring";
-import { startAfterQuiz } from "@/lib/report-bg-runner";
+// report-bg-runner：报告生成已改为 Q3 答完后统一触发，quiz 不再预热
 import type { JobFormData, QuizAnswer, QuizQuestion } from "@/lib/types";
 
 const cubicEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -251,8 +251,7 @@ export default function QuizPage() {
         sessionStorage.setItem("scoring", JSON.stringify(scoring));
         sessionStorage.removeItem("reportData");
       } catch {}
-      // 触发后台生成 strength / positioning / advice
-      startAfterQuiz({ formData, quizAnswers: finalAnswers, scoring });
+      // 报告生成改为 interview Q3 答完后统一触发，这里只跳转
       router.push("/interview");
     } catch (e) {
       console.error("[quiz] submit failed:", e);

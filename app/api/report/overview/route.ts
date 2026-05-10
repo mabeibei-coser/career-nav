@@ -51,16 +51,16 @@ function validateOverview(d: Overview): string | null {
   return null;
 }
 
-const SYSTEM_PROMPT = `你是黄浦区职业咨询师。基于用户的「性格四维评分」+「Q1/Q2 访谈回答」生成性格综述。
+const SYSTEM_PROMPT = `你是黄浦区职业咨询师。基于用户的「性格四维评分」+「Q1/Q2/Q3 访谈回答」生成性格综述。
 
 ${APPLICANT_BASELINE}
 
 【任务】生成一份"职业性格总评"，包含：
 1. personality.type：性格类型简短命名（如"稳健务实型"、"开拓协作型"），不超过 8 字，不出现 MBTI / 大五 / 霍兰德等专有词
 2. personality.traits：3-4 个性格标签（每个 2-4 字）
-3. personality.description：80-120 字描述，结合四维评分和 Q1Q2 访谈内容
+3. personality.description：80-120 字描述，结合四维评分和 Q1/Q2/Q3 访谈内容
 4. fourDimRadar：4 项 { name, score, conclusion }，name 严格用「性格底色 / 工作风格 / 价值驱动 / 适配方向」，score 严格用入参 scoring.fourDim 的对应值（不重新计算！），conclusion 是该维度的简短文字结论（不超过 30 字，描述用户在该维度的突出特点）
-5. summary：120-150 字综述，鼓励 + 务实语气，融入 Q1Q2 信息
+5. summary：120-150 字综述，鼓励 + 务实语气，融入 Q1/Q2/Q3 访谈信息（若 Q3 提供了有价值的背景，优先融入）
 
 【硬约束】
 - 严禁出现 MBTI / 大五 / 霍兰德 / 职业兴趣测验等专有名词
@@ -79,6 +79,7 @@ function buildInterviewSummary(q1q2: InterviewQ1Q2): string | undefined {
   const parts: string[] = [];
   if (q1q2.Q1?.trim()) parts.push(`Q1 回答：${q1q2.Q1.trim()}`);
   if (q1q2.Q2?.trim()) parts.push(`Q2 回答：${q1q2.Q2.trim()}`);
+  if (q1q2.Q3?.trim()) parts.push(`Q3 回答：${q1q2.Q3.trim()}`);
   return parts.length > 0 ? parts.join("\n") : undefined;
 }
 

@@ -368,17 +368,19 @@ export default function LoadingPage() {
     let formData: JobFormData | null = null;
     let scoring: ScoringResult | null = null;
     let quizAnswers: QuizAnswer[] = [];
-    let interviewQ1Q2: { Q1?: string; Q2?: string } = {};
+    let interviewQ1Q2: { Q1?: string; Q2?: string; Q3?: string } = {};
 
     try {
       const fdStr = sessionStorage.getItem("formData");
       const scStr = sessionStorage.getItem("scoring");
       const qaStr = sessionStorage.getItem("quizAnswers");
+      // interviewQ1Q2 由 interview 页 Q3 答完时写入（含 Q1+Q2+Q3）
+      const ivStr = sessionStorage.getItem("interviewQ1Q2");
+      // interviewData 含 summary（兜底）
       const idStr = sessionStorage.getItem("interviewData");
 
       if (!fdStr || !scStr) {
         // 没有 formData 或 scoring → 用户没走 form/quiz 流程，跳回 form
-        // 这是"内存 miss + sessionStorage 也无 bg 标记"的情况
         router.replace("/form");
         return;
       }
@@ -390,20 +392,31 @@ export default function LoadingPage() {
       }
       quizAnswers = qaStr ? (JSON.parse(qaStr) as QuizAnswer[]) : [];
 
-      // interviewData 含 turns + summary，提取 Q1 / Q2 文本
-      if (idStr) {
+      // 优先用 interviewQ1Q2 key（由 Q3 触发时写入，含 Q1+Q2+Q3）
+      if (ivStr) {
         try {
-          const parsed = JSON.parse(idStr) as {
-            turns?: Array<{ index?: number; userAnswerText?: string }>;
-            summary?: string;
+          const parsed = JSON.parse(ivStr) as {
+            Q1?: string;
+            Q2?: string;
+            Q3?: string;
           };
-          const turns = parsed.turns ?? [];
-          const q1 = turns.find((t) => t.index === 0)?.userAnswerText;
-          const q2 = turns.find((t) => t.index === 1)?.userAnswerText;
           interviewQ1Q2 = {
-            Q1: q1 || parsed.summary || undefined,
-            Q2: q2 || undefined,
+            Q1: parsed.Q1 || undefined,
+            Q2: parsed.Q2 || undefined,
+            Q3: parsed.Q3 || undefined,
           };
+        } catch {
+          /* ignore parse error */
+        }
+      }
+
+      // 兜底：从 interviewData.summary 提取 Q1（用于跳过访谈的情况）
+      if (!interviewQ1Q2.Q1 && idStr) {
+        try {
+          const parsed = JSON.parse(idStr) as { summary?: string };
+          if (parsed.summary) {
+            interviewQ1Q2 = { Q1: parsed.summary };
+          }
         } catch {
           /* ignore parse error */
         }

@@ -101,6 +101,7 @@ export interface InterviewAnswer {
 export interface InterviewQ1Q2 {
   Q1?: string;
   Q2?: string;
+  Q3?: string; // 访谈第三题答案（题库固定题，进报告）
 }
 
 // ========== 报告类型 ==========
