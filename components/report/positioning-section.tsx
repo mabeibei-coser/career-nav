@@ -16,6 +16,14 @@ interface Props {
 
 const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
+// 能力分档（与 overview 一致）
+function getTier(score: number): { label: string; color: string; bg: string } {
+  if (score >= 80) return { label: "高", color: "var(--blue-700)", bg: "var(--blue-50)" };
+  if (score >= 60) return { label: "中高", color: "oklch(0.50 0.14 210)", bg: "oklch(0.97 0.02 210)" };
+  if (score >= 40) return { label: "中", color: "oklch(0.55 0.14 55)", bg: "oklch(0.97 0.04 55)" };
+  return { label: "基础", color: "oklch(0.50 0.16 25)", bg: "oklch(0.97 0.04 25)" };
+}
+
 function PositionCard({
   rec,
   variant,
@@ -40,11 +48,13 @@ function PositionCard({
       };
 
   const safeIndustries = Array.isArray(rec.industries) ? rec.industries : [];
+  const coreResponsibilities = Array.isArray(rec.coreResponsibilities) ? rec.coreResponsibilities : [];
+  const coreCompetencies = Array.isArray(rec.coreCompetencies) ? rec.coreCompetencies : [];
   const score = typeof rec.matchScore === "number" ? Math.max(0, Math.min(100, Math.round(rec.matchScore))) : null;
 
   return (
     <Wrapper
-      {...motionProps}
+      {...(motionProps as Record<string, unknown>)}
       className={cn(
         "relative report-card p-5 break-inside-avoid",
         isPrimary &&
@@ -89,6 +99,57 @@ function PositionCard({
         </p>
       )}
 
+      {/* 核心职责 */}
+      {coreResponsibilities.length > 0 && (
+        <div className="mb-4">
+          <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-2">
+            核心职责
+          </div>
+          <ul className="space-y-1.5">
+            {coreResponsibilities.map((resp, i) => (
+              <li key={i} className="flex items-start gap-2 text-[13px] text-[var(--navy-800)]">
+                <span className="mt-1.5 size-1.5 rounded-full bg-[var(--blue-500)] shrink-0" />
+                {resp}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 核心能力 */}
+      {coreCompetencies.length > 0 && (
+        <div className="mb-4">
+          <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-2">
+            核心能力要求
+          </div>
+          <div className="space-y-2">
+            {coreCompetencies.map((comp, i) => {
+              const compScore = typeof comp.score === "number" ? Math.max(0, Math.min(100, Math.round(comp.score))) : 0;
+              const tier = getTier(compScore);
+              return (
+                <div key={i}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[12.5px] text-[var(--navy-800)]">{comp.name}</span>
+                    <span
+                      className="text-[11px] font-semibold px-1.5 py-0.5 rounded"
+                      style={{ color: tier.color, background: tier.bg }}
+                    >
+                      {tier.label}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-[var(--blue-100)] overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${compScore}%`, background: "var(--primary)" }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* industries 标签云 */}
       {safeIndustries.length > 0 && (
         <div className="mb-4">
@@ -105,25 +166,39 @@ function PositionCard({
         </div>
       )}
 
+      {/* 为什么适合你 */}
+      {rec.fitReason && (
+        <div className="border-l-[3px] border-[var(--blue-400)] pl-3 py-1 mb-3">
+          <div className="text-[11px] font-semibold text-[var(--report-ink-muted)] mb-1">
+            为什么适合你
+          </div>
+          <p className="text-[13px] leading-[1.65] text-[var(--navy-800)]">
+            {rec.fitReason}
+          </p>
+        </div>
+      )}
+
       {/* culture + teamRole */}
-      <div className="space-y-2 pt-3 border-t border-[var(--report-divider,rgba(15,23,42,0.06))]">
-        {rec.culture && (
-          <div className="flex gap-2 text-[13px] leading-[1.6]">
-            <span className="shrink-0 w-[64px] text-[var(--report-ink-muted)] font-medium">
-              企业文化
-            </span>
-            <span className="text-[var(--navy-800)]">{rec.culture}</span>
-          </div>
-        )}
-        {rec.teamRole && (
-          <div className="flex gap-2 text-[13px] leading-[1.6]">
-            <span className="shrink-0 w-[64px] text-[var(--report-ink-muted)] font-medium">
-              团队角色
-            </span>
-            <span className="text-[var(--navy-800)]">{rec.teamRole}</span>
-          </div>
-        )}
-      </div>
+      {(rec.culture || rec.teamRole) && (
+        <div className="space-y-2 pt-3 border-t border-[var(--report-divider,rgba(15,23,42,0.06))]">
+          {rec.culture && (
+            <div className="flex gap-2 text-[13px] leading-[1.6]">
+              <span className="shrink-0 w-[64px] text-[var(--report-ink-muted)] font-medium">
+                企业文化
+              </span>
+              <span className="text-[var(--navy-800)]">{rec.culture}</span>
+            </div>
+          )}
+          {rec.teamRole && (
+            <div className="flex gap-2 text-[13px] leading-[1.6]">
+              <span className="shrink-0 w-[64px] text-[var(--report-ink-muted)] font-medium">
+                团队角色
+              </span>
+              <span className="text-[var(--navy-800)]">{rec.teamRole}</span>
+            </div>
+          )}
+        </div>
+      )}
     </Wrapper>
   );
 }

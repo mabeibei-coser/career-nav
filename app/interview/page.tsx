@@ -3,13 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { SkipForward, Keyboard, Mic, Info } from "lucide-react";
+import { SkipForward, Keyboard, Mic } from "lucide-react";
 import { AiOrb, type OrbState } from "./_components/ai-orb";
 import { MicButton } from "./_components/mic-button";
 import { TranscriptPreview } from "./_components/transcript-preview";
 import { StepIndicator } from "@/components/ui/step-indicator";
 import { useAudioRecorder } from "@/lib/hooks/use-audio-recorder";
 import { useAudioVisualizer } from "@/lib/hooks/use-audio-visualizer";
+import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import { buildQ3Q4 } from "@/lib/interview-questions";
 import { startAfterQ1Q2 } from "@/lib/report-bg-runner";
 import type {
@@ -32,12 +33,12 @@ type Phase =
   | "greeting"
   | "idle"
   | "loading-q"
+  | "speaking-q"
   | "ready"
   | "recording"
   | "transcribing"
   | "preview"
   | "text-input"
-  | "q3-intro" // Q3 导语过渡页（UC1 缓解）
   | "done"
   | "error";
 
@@ -55,9 +56,6 @@ function canUseVoiceRecording(): boolean {
 const GREETING_TEXT =
   "你好，我是你的 AI 职业顾问，接下来我会问你 4 个问题，帮你完善这份定位报告。";
 
-const Q3_INTRO_TEXT =
-  "以下 2 题用于深入了解你的想法，可能不会在报告中具体引用。";
-
 // 用 4 题答案拼一个 raw "summary" 文本，作为 /loading 页的兜底
 // （只放 Q1Q2，Q3Q4 不入兜底——与 summarize API 行为一致）
 function buildRawAnswersSummary(answers: InterviewAnswer[]): string {
@@ -68,6 +66,21 @@ function buildRawAnswersSummary(answers: InterviewAnswer[]): string {
         `第${i + 1}问（${a.questionId}）：${a.text || "（未作答）"}`,
     )
     .join("\n\n");
+}
+
+// ---------- AudioContext 解锁（iOS 需在用户手势里初始化，否则 play() 被静默拦截） ----------
+
+function unlockAudio() {
+  try {
+    // 播放一段极短静音 MP3，触发 iOS/WebKit 对 AudioContext 的授权
+    const a = new Audio(
+      "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZgAAAA8AAAACAAACcQCA",
+    );
+    a.play().catch(() => {});
+    a.pause();
+  } catch {
+    // 降级：忽略（非 iOS 设备不影响）
+  }
 }
 
 // ---------- 主组件 ----------
@@ -107,6 +120,15 @@ export default function InterviewPage() {
   const recorder = useAudioRecorder();
   const { amplitude } = useAudioVisualizer(recorder.mediaStream);
 
+  // TTS 播放（AI 读题）
+  const speakingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handlePlayerEnded = useCallback(() => {
+    if (phaseRef.current === "speaking-q") {
+      setPhaseSync("ready");
+    }
+  }, [setPhaseSync]);
+  const player = useAudioPlayer(handlePlayerEnded);
+
   // ---------- 初始化：读 sessionStorage + 拉 Q1Q2 + 抽 Q3Q4 ----------
 
   useEffect(() => {
@@ -125,7 +147,7 @@ export default function InterviewPage() {
       formData = JSON.parse(fd) as JobFormData;
       scoring = JSON.parse(sc) as ScoringResult;
       quizAnswers = qa ? (JSON.parse(qa) as QuizAnswer[]) : [];
-      if (!formData?.targetPosition) {
+      if (!formData?.identity) {
         router.replace("/form");
         return;
       }
@@ -192,7 +214,31 @@ export default function InterviewPage() {
       const all = [...q1q2, ...q3q4];
       questionsRef.current = all;
       setQuestions(all);
-      // greeting 阶段不再调 TTS —— 用户点"开始"才进入 Q1
+
+      // 后台预合成 Q3Q4 语音（Q1Q2 已在服务端合成并随 /question 返回）
+      // 失败静默降级，不影响主流程
+      const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+      void Promise.allSettled([
+        fetch(`${BASE_PATH}/api/interview/tts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: q3q4[0].text }),
+        }).then((r) => r.json() as Promise<{ audioBase64: string }>),
+        fetch(`${BASE_PATH}/api/interview/tts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: q3q4[1].text }),
+        }).then((r) => r.json() as Promise<{ audioBase64: string }>),
+      ]).then((results) => {
+        const updated = [...questionsRef.current];
+        results.forEach((r, i) => {
+          if (r.status === "fulfilled" && r.value?.audioBase64) {
+            updated[2 + i] = { ...updated[2 + i], audioBase64: r.value.audioBase64 };
+          }
+        });
+        questionsRef.current = updated;
+        setQuestions([...updated]);
+      });
     })();
 
     return () => {
@@ -207,15 +253,38 @@ export default function InterviewPage() {
   const currentQ: InterviewQuestion | null =
     questions[currentIndex] ?? null;
 
-  // ---------- 进入下一题（含 Q3 导语） ----------
+  // ---------- 朗读题目（或静默跳过） ----------
+
+  const presentQuestion = useCallback(
+    (q: InterviewQuestion | undefined) => {
+      if (!q) return;
+      // 清理上一轮超时（防止残留）
+      if (speakingTimeoutRef.current) {
+        clearTimeout(speakingTimeoutRef.current);
+        speakingTimeoutRef.current = null;
+      }
+      if (q.audioBase64) {
+        setPhaseSync("speaking-q");
+        player.play(q.audioBase64);
+        // 15s 安全超时：防止音频卡住无法答题
+        speakingTimeoutRef.current = setTimeout(() => {
+          player.stop();
+          if (phaseRef.current === "speaking-q") {
+            setPhaseSync("ready");
+          }
+        }, 15_000);
+      } else {
+        // 无语音（TTS 失败或未返回）→ 直接进入可作答状态
+        setPhaseSync("ready");
+      }
+    },
+    [player, setPhaseSync],
+  );
+
+  // ---------- 进入下一题 ----------
 
   const advanceTo = useCallback(
     (nextIndex: number) => {
-      // Q3（index=2）之前先弹一次性导语
-      if (nextIndex === 2 && phaseRef.current !== "q3-intro") {
-        setPhaseSync("q3-intro");
-        return;
-      }
       if (nextIndex >= TOTAL_QUESTIONS) {
         // Q4 答完 → 跳 loading
         setPhaseSync("done");
@@ -223,14 +292,16 @@ export default function InterviewPage() {
         return;
       }
       setCurrentIndex(nextIndex);
-      setPhaseSync("ready");
+      presentQuestion(questionsRef.current[nextIndex]);
     },
-    [router, setPhaseSync],
+    [router, setPhaseSync, presentQuestion],
   );
 
   // ---------- 开始访谈：从 greeting 进入 Q1 ----------
 
   const handleStart = useCallback(async () => {
+    // iOS AudioContext 解锁必须在用户手势里执行
+    unlockAudio();
     // 预请求麦克风权限：在用户手势上下文里提前拿授权，
     // 后面按住录音时 getUserMedia 就秒返回，不会弹权限弹窗导致时序错乱
     try {
@@ -248,19 +319,30 @@ export default function InterviewPage() {
       return;
     }
     setCurrentIndex(0);
-    setPhaseSync("ready");
-  }, [setPhaseSync]);
+    presentQuestion(questionsRef.current[0]);
+  }, [setPhaseSync, presentQuestion]);
 
-  // 题目就绪后，如果当前还在 loading-q，自动进 ready
+  // 题目就绪后，如果当前还在 loading-q，自动朗读第一题
   useEffect(() => {
     if (
       phaseRef.current === "loading-q" &&
       questions.length === TOTAL_QUESTIONS
     ) {
       setCurrentIndex(0);
-      setPhaseSync("ready");
+      presentQuestion(questionsRef.current[0]);
     }
-  }, [questions.length, setPhaseSync]);
+  }, [questions.length, presentQuestion]);
+
+  // ---------- 清理（组件卸载时停止语音 + 超时） ----------
+
+  useEffect(() => {
+    return () => {
+      if (speakingTimeoutRef.current) {
+        clearTimeout(speakingTimeoutRef.current);
+        speakingTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // ---------- 录音 ----------
 
@@ -451,7 +533,8 @@ export default function InterviewPage() {
 
   const orbState: OrbState = (() => {
     if (phase === "recording") return "recording";
-    if (phase === "loading-q" || phase === "transcribing") return "processing";
+    if (phase === "loading-q" || phase === "transcribing" || phase === "speaking-q")
+      return "processing";
     return "idle";
   })();
 
@@ -541,35 +624,10 @@ export default function InterviewPage() {
               </motion.div>
             )}
 
-            {phase === "q3-intro" && (
-              <motion.div
-                key="q3-intro"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="w-full"
-              >
-                <div
-                  className="px-5 py-4 rounded-2xl text-[14px] leading-[1.7] text-slate-700"
-                  style={{
-                    background: "rgba(255,255,255,0.85)",
-                    backdropFilter: "blur(8px)",
-                    boxShadow:
-                      "0 1px 2px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04)",
-                    border: "1px solid rgba(255,255,255,0.9)",
-                  }}
-                >
-                  <div className="flex items-start gap-2">
-                    <Info size={14} className="text-blue-500 mt-0.5 shrink-0" />
-                    <div>{Q3_INTRO_TEXT}</div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
             {(phase === "ready" ||
               phase === "recording" ||
-              phase === "transcribing") &&
+              phase === "transcribing" ||
+              phase === "speaking-q") &&
               questionText && (
                 <motion.div
                   key={`q-${currentIndex}`}
@@ -647,27 +705,6 @@ export default function InterviewPage() {
               </motion.button>
             )}
 
-            {phase === "q3-intro" && (
-              <motion.button
-                key="q3-continue"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                onClick={() => {
-                  setCurrentIndex(2);
-                  setPhaseSync("ready");
-                }}
-                className="px-7 py-3 text-white rounded-full text-sm font-medium shadow-lg active:scale-95 transition-all min-h-[44px]"
-                style={{
-                  background:
-                    "linear-gradient(135deg, #4f8cff 0%, #3b82f6 100%)",
-                  boxShadow: "0 4px 16px rgba(59,130,246,0.35)",
-                }}
-              >
-                继续作答
-              </motion.button>
-            )}
-
             {phase === "loading-q" && (
               <motion.div
                 key="hint"
@@ -677,6 +714,18 @@ export default function InterviewPage() {
                 className="text-xs text-slate-400"
               >
                 正在准备问题...
+              </motion.div>
+            )}
+
+            {phase === "speaking-q" && (
+              <motion.div
+                key="speaking"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-xs text-slate-400 animate-pulse"
+              >
+                AI 正在读题，稍后即可回答...
               </motion.div>
             )}
 

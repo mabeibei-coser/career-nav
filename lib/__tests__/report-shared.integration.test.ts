@@ -3,7 +3,7 @@ import { buildBaseContext, callDeepseekJson } from "../report-shared";
 import type { JobFormData, QuizAnswer } from "../types";
 
 const baseFormData: JobFormData = {
-  identity: "graduate",
+  identity: "recent_grad",
   targetPosition: "前端开发工程师",
   education: "本科",
   workYears: "应届/无",
@@ -24,16 +24,16 @@ describe("buildBaseContext", () => {
     expect(ctx).toContain("【素材声明】");
   });
 
-  it("identity=graduate 显式说明为应届毕业生", () => {
+  it("identity=recent_grad 显式说明为离校未就业", () => {
     const ctx = buildBaseContext(baseFormData);
-    expect(ctx).toContain("应届毕业生");
-    expect(ctx).not.toContain("求职/失业中");
+    expect(ctx).toContain("离校未就业");
+    expect(ctx).not.toContain("一般失业人员");
   });
 
-  it("identity=jobseeker 显式说明为求职/失业中", () => {
-    const ctx = buildBaseContext({ ...baseFormData, identity: "jobseeker" });
-    expect(ctx).toContain("求职/失业中");
-    expect(ctx).not.toContain("身份：应届毕业生");
+  it("identity=general_unemployed 显式说明为一般失业人员", () => {
+    const ctx = buildBaseContext({ ...baseFormData, identity: "general_unemployed" });
+    expect(ctx).toContain("一般失业人员");
+    expect(ctx).not.toContain("离校未就业");
   });
 
   it("不含旧字段 targetCompany / targetCityTier", () => {

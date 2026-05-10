@@ -60,6 +60,11 @@ function validatePositionRec(
     return `${label}.industries 含占位符`;
   if (isBadString(rec.culture, 4)) return `${label}.culture 缺失`;
   if (isBadString(rec.teamRole, 2)) return `${label}.teamRole 缺失`;
+  // 新字段软校验：缺失不强制失败（LLM 渐进支持）
+  if (rec.coreResponsibilities !== undefined && !Array.isArray(rec.coreResponsibilities))
+    return `${label}.coreResponsibilities 格式错误`;
+  if (rec.coreCompetencies !== undefined && !Array.isArray(rec.coreCompetencies))
+    return `${label}.coreCompetencies 格式错误`;
   return null;
 }
 
@@ -74,36 +79,48 @@ function validatePositioning(d: Positioning): string | null {
 
 function normalizePositioning(d: Positioning): Positioning {
   // matchScore clamp [0,100]，industries 去空白避免 [" ", "..."] 漏网
+  // 新字段直接透传（coreResponsibilities / coreCompetencies / fitReason），...spread 已包含
+  const normalizeRec = (rec: PositionRecommendation): PositionRecommendation => ({
+    ...rec,
+    matchScore: clampScore(rec.matchScore),
+    industries: (rec.industries ?? [])
+      .map((s) => String(s).trim())
+      .filter((s) => s.length > 0),
+    coreResponsibilities: Array.isArray(rec.coreResponsibilities)
+      ? rec.coreResponsibilities.map((r) => String(r).trim()).filter(Boolean)
+      : undefined,
+    coreCompetencies: Array.isArray(rec.coreCompetencies)
+      ? rec.coreCompetencies
+          .filter((c) => c && typeof c === "object" && typeof c.name === "string")
+          .map((c) => ({ name: String(c.name).trim(), score: clampScore(c.score) }))
+      : undefined,
+    fitReason:
+      typeof rec.fitReason === "string" && rec.fitReason.trim().length > 0
+        ? rec.fitReason.trim()
+        : undefined,
+  });
   return {
-    primary: {
-      ...d.primary,
-      matchScore: clampScore(d.primary.matchScore),
-      industries: d.primary.industries
-        .map((s) => String(s).trim())
-        .filter((s) => s.length > 0),
-    },
-    secondary: {
-      ...d.secondary,
-      matchScore: clampScore(d.secondary.matchScore),
-      industries: d.secondary.industries
-        .map((s) => String(s).trim())
-        .filter((s) => s.length > 0),
-    },
+    primary: normalizeRec(d.primary),
+    secondary: normalizeRec(d.secondary),
   };
 }
 
 const SYSTEM_PROMPT = `你是黄浦区职业咨询师。基于用户的简历、身份、四维 + 能力评分、目标岗位，推荐首选 + 次选岗位。
 
 【任务】生成"职业定位"，含：
-- primary: { position, matchScore (0-100), reasoning (100字以内), industries[2-3], culture, teamRole }
+- primary: { position, matchScore (0-100), reasoning (100字以内), industries[2-3], culture, teamRole, coreResponsibilities, coreCompetencies, fitReason }
 - secondary: 同结构，提供差异化路径
+新字段说明：
+  - coreResponsibilities: 3条该岗位的核心职责（每条15字以内）
+  - coreCompetencies: 4-5项核心能力要求 { name: string, score: number }，score 是该岗位对此能力的要求程度（0-100），结合用户能力评分判断匹配度
+  - fitReason: 30-60字，说明为什么该岗位适合这位用户（基于简历+量表结果），支持性语气
 
 【岗位推荐规则】（极重要）
 1. **根据简历自适应水位**：简历强（多年相关经验、技能扎实）→ 可推荐稍高一档；简历薄（应届无经验、长空白期）→ 推荐入门门槛
 2. **不预设硬规则**（不要拍脑袋说"5 年以上"或"管理岗"），由你判断
 3. **不推荐用户简历完全不匹配的岗位**（如简历无技术背景却推算法工程师 / 产品总监 / 投行分析师 / 数据科学家）
-4. **graduate 身份**：可以推荐 0 经验入门岗、青年见习类岗位
-5. **jobseeker 身份**：避免嘲讽空白期；推荐操作 / 支持 / 服务类岗位为主，除非简历显示有过硬技能
+4. **recent_grad（离校未就业）**：可以推荐 0 经验入门岗、青年见习类岗位
+5. **young_unemployed（35岁以下失业青年）/ general_unemployed（一般失业人员）**：避免嘲讽空白期；推荐操作 / 支持 / 服务类岗位为主，除非简历显示有过硬技能
 6. 用户填的 targetPosition 是参考但不是强约束 —— 如果简历方向与 target 不一致，可推一个 target 方向 + 一个简历方向
 
 【硬约束】
@@ -112,7 +129,21 @@ const SYSTEM_PROMPT = `你是黄浦区职业咨询师。基于用户的简历、
 - 不出现 MBTI / 大五 / 霍兰德等专有词
 - 不编造具体行业数据 / 薪资数字
 
-输出 JSON: { "primary": {...}, "secondary": {...} }`;
+输出 JSON schema:
+{
+  "primary": {
+    "position": "string",
+    "matchScore": number,
+    "reasoning": "string",
+    "industries": ["string"],
+    "culture": "string",
+    "teamRole": "string",
+    "coreResponsibilities": ["string", "string", "string"],
+    "coreCompetencies": [{ "name": "string", "score": number }],
+    "fitReason": "string"
+  },
+  "secondary": { ...同结构... }
+}`;
 
 function buildScoringContext(scoring: ScoringResult): string {
   const fourDim = scoring.fourDim
@@ -154,11 +185,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(payload);
   }
 
-  if (!formData?.targetPosition || !scoring) {
+  if (!formData?.identity || !scoring) {
     const payload: PositioningResponse = {
       data: MOCK_POSITIONING,
       source: "mock",
-      errorMessage: "缺少必要输入",
+      errorMessage: "缺少必要输入（identity 或 scoring）",
     };
     return NextResponse.json(payload);
   }

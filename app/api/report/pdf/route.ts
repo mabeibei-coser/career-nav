@@ -120,7 +120,7 @@ function buildPdfResponse(buffer: Buffer, filename: string): NextResponse {
 
 function filenameFor(reportData: ReportData | null): string {
   const position = reportData?.meta?.formData?.targetPosition ?? "报告";
-  return `职业定位报告_${position}_${todayYYYYMMDD()}.pdf`;
+  return `职业导航报告_${position}_${todayYYYYMMDD()}.pdf`;
 }
 
 async function renderAndRespond(reportData: ReportData): Promise<NextResponse> {
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
   }
 
   const reportData = body?.reportData;
-  if (!reportData?.meta?.formData?.targetPosition) {
+  if (!reportData?.meta?.formData?.identity) {
     return NextResponse.json({ error: "缺少 reportData" }, { status: 400 });
   }
 

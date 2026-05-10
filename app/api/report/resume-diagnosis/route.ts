@@ -96,7 +96,11 @@ function validateAndNormalize(data: ResumeDiagnosis): string | null {
 
 function buildUserPrompt(formData: JobFormData, q1q2: InterviewQ1Q2): string {
   const identityLabel =
-    formData.identity === "graduate" ? "应届毕业生" : "求职/失业中";
+    formData.identity === "recent_grad"
+      ? "离校未就业"
+      : formData.identity === "young_unemployed"
+        ? "35岁以下失业青年"
+        : "一般失业人员";
   const resumeText = formData.resumeText ?? "";
   const snippet =
     resumeText.length > 1500 ? resumeText.slice(0, 1500) + "\n...(已截断)" : resumeText;

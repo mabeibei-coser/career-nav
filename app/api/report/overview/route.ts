@@ -59,19 +59,19 @@ ${APPLICANT_BASELINE}
 1. personality.type：性格类型简短命名（如"稳健务实型"、"开拓协作型"），不超过 8 字，不出现 MBTI / 大五 / 霍兰德等专有词
 2. personality.traits：3-4 个性格标签（每个 2-4 字）
 3. personality.description：80-120 字描述，结合四维评分和 Q1Q2 访谈内容
-4. fourDimRadar：4 项 { name, score }，name 严格用「性格底色 / 工作风格 / 价值驱动 / 适配方向」，score 严格用入参 scoring.fourDim 的对应值（不重新计算！）
+4. fourDimRadar：4 项 { name, score, conclusion }，name 严格用「性格底色 / 工作风格 / 价值驱动 / 适配方向」，score 严格用入参 scoring.fourDim 的对应值（不重新计算！），conclusion 是该维度的简短文字结论（不超过 30 字，描述用户在该维度的突出特点）
 5. summary：120-150 字综述，鼓励 + 务实语气，融入 Q1Q2 信息
 
 【硬约束】
 - 严禁出现 MBTI / 大五 / 霍兰德 / 职业兴趣测验等专有名词
-- 描述用户身份是 graduate（应届）还是 jobseeker（求职/失业中），措辞要贴合身份；jobseeker 不要嘲讽空白期
+- 描述用户身份：recent_grad（离校未就业）/ young_unemployed（35岁以下失业青年）/ general_unemployed（一般失业人员），措辞要贴合身份；失业类身份不要嘲讽空白期
 - fourDimRadar 的 score 必须照搬入参，不要 LLM 重算
 - 输出必须是合法 JSON，字段名严格匹配下方 schema
 
 输出 JSON schema:
 {
   "personality": { "type": "string", "traits": ["string"], "description": "string" },
-  "fourDimRadar": [{ "name": "string", "score": number }],
+  "fourDimRadar": [{ "name": "string", "score": number, "conclusion": "string" }],
   "summary": "string"
 }`;
 
@@ -100,12 +100,12 @@ export async function POST(req: NextRequest) {
     const sc = body?.scoring as ScoringResult | undefined;
     const iv = (body?.interviewQ1Q2 as InterviewQ1Q2 | undefined) ?? {};
 
-    if (!fd?.targetPosition || !fd?.identity) {
+    if (!fd?.identity) {
       return NextResponse.json(
         {
           data: null,
           source: "mock" as const,
-          errorMessage: "缺少表单关键字段（targetPosition / identity）",
+          errorMessage: "缺少表单关键字段（identity）",
         },
         { status: 200 }
       );
@@ -144,9 +144,10 @@ export async function POST(req: NextRequest) {
     const mock = getMockBySection("overview") as Overview;
     const data: Overview = {
       ...mock,
-      fourDimRadar: scoring.fourDim.map((d) => ({
+      fourDimRadar: scoring.fourDim.map((d, i) => ({
         name: d.name,
         score: d.score,
+        ...(mock.fourDimRadar[i]?.conclusion ? { conclusion: mock.fourDimRadar[i].conclusion } : {}),
       })),
     };
     return NextResponse.json({ data, source: "mock" as const });
@@ -175,10 +176,11 @@ export async function POST(req: NextRequest) {
       context: "overview",
     });
 
-    // 强制覆写 fourDimRadar：LLM 可能瞎编 score，用入参强行覆盖
-    data.fourDimRadar = scoring.fourDim.map((d) => ({
+    // 强制覆写 fourDimRadar score：LLM 可能瞎编 score，用入参强行覆盖；但保留 LLM 生成的 conclusion
+    data.fourDimRadar = scoring.fourDim.map((d, i) => ({
       name: d.name,
       score: d.score,
+      ...(data.fourDimRadar[i]?.conclusion ? { conclusion: data.fourDimRadar[i].conclusion } : {}),
     }));
 
     // source 判断：DeepSeek 主链路成功用 "deepseek"；callWithFallback 内部
@@ -203,9 +205,10 @@ export async function POST(req: NextRequest) {
     const mock = getMockBySection("overview") as Overview;
     const fallback: Overview = {
       ...mock,
-      fourDimRadar: scoring.fourDim.map((d) => ({
+      fourDimRadar: scoring.fourDim.map((d, i) => ({
         name: d.name,
         score: d.score,
+        ...(mock.fourDimRadar[i]?.conclusion ? { conclusion: mock.fourDimRadar[i].conclusion } : {}),
       })),
     };
     return NextResponse.json(

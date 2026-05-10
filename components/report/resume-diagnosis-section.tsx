@@ -200,9 +200,12 @@ export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
                   Resume Score
                 </span>
               </div>
-              <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)] mb-1">
+              <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)] mb-0.5">
                 简历整体完成度
               </h3>
+              <p className="text-[12.5px] font-medium mb-1" style={{ color: getScoreColor(score) }}>
+                {score >= 85 ? "简历基础扎实" : score >= 70 ? "简历有一定基础" : score >= 55 ? "简历需要补充" : "简历需要较多完善"}
+              </p>
               <p className="text-[13px] leading-[1.65] text-[var(--report-ink-soft)]">
                 以下条目仅供参考，可按你的节奏逐步补充。
               </p>

@@ -1,6 +1,6 @@
 // ========== 表单输入类型 ==========
 
-export type UserIdentity = "graduate" | "jobseeker";
+export type UserIdentity = "recent_grad" | "young_unemployed" | "general_unemployed";
 
 export interface JobFormData {
   identity: UserIdentity;
@@ -45,6 +45,7 @@ export interface QuizQuestion {
   text: string;
   reverse: boolean;
   weights: Partial<Record<AbilityKey, number>>;
+  context?: "all" | "grad" | "work"; // 身份适配：all=所有身份, grad=应届/离校, work=有工作经历
 }
 
 export interface QuizBankDimension {
@@ -89,6 +90,7 @@ export interface InterviewQuestion {
   id: InterviewQuestionId;
   text: string;
   source: "dynamic" | "fixed";
+  audioBase64?: string; // Volcano TTS base64 MP3（可能为空，前端静默降级）
 }
 
 export interface InterviewAnswer {
@@ -130,6 +132,7 @@ export interface Overview {
   fourDimRadar: {
     name: string;
     score: number;
+    conclusion?: string;  // LLM 生成的维度文字结论（30 字以内）
   }[];
   summary: string;
 }
@@ -158,6 +161,9 @@ export interface PositionRecommendation {
   industries: string[];
   culture: string;
   teamRole: string;
+  coreResponsibilities?: string[];                              // 核心职责（3 条，每条 ≤15 字）
+  coreCompetencies?: { name: string; score: number }[];       // 核心能力要求（4-5 项，score 0-100）
+  fitReason?: string;                                          // 为什么适合你（30-60 字）
 }
 
 export interface Positioning {

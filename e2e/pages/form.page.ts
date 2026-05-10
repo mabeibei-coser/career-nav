@@ -2,10 +2,10 @@ import type { Page } from "@playwright/test";
 
 export interface FormData {
   /** 身份选择 */
-  identity: "graduate" | "jobseeker";
-  /** 目标岗位（自由文本） */
-  targetPosition: string;
-  /** 学历，使用 EDUCATION_OPTIONS value：high_school / junior_college / bachelor / master / phd / other */
+  identity: "recent_grad" | "young_unemployed" | "general_unemployed";
+  /** 目标岗位（选填） */
+  targetPosition?: string;
+  /** 学历，使用 EDUCATION_OPTIONS value：junior_high / high_school / junior_college / bachelor / master_plus */
   education: string;
   /** 工作年限，使用 WORK_YEARS_OPTIONS value：none / lt1 / 1to3 / 3to5 / 5to10 / gt10 */
   workYears: string;
@@ -14,8 +14,9 @@ export interface FormData {
 }
 
 const IDENTITY_LABELS: Record<FormData["identity"], string> = {
-  graduate: "应届毕业生",
-  jobseeker: "求职/失业中",
+  recent_grad: "离校未就业",
+  young_unemployed: "35岁以下失业青年",
+  general_unemployed: "一般失业人员",
 };
 
 const EDUCATION_LABELS: Record<string, string> = {
@@ -48,16 +49,17 @@ export class FormPage {
    * 注意：identity 是双卡片按钮，targetPosition 是 input，education/workYears 是 @base-ui/react Select。
    */
   async fill(data: FormData) {
-    // 1. identity 双卡片按钮：accessible name = "标题 描述" 拼接，所以匹配描述里的关键短语
-    const idDescriptionFragment =
-      data.identity === "graduate" ? "在校大学生" : "已离开学校";
+    // 1. identity 三卡片按钮：匹配标签文字
+    const idLabel = IDENTITY_LABELS[data.identity];
     await this.page
-      .locator(`button:has-text("${idDescriptionFragment}")`)
+      .locator(`button:has-text("${idLabel}")`)
       .first()
       .click();
 
-    // 2. targetPosition input
-    await this.page.locator("#targetPosition").fill(data.targetPosition);
+    // 2. targetPosition input（选填，可跳过）
+    if (data.targetPosition) {
+      await this.page.locator("#targetPosition").fill(data.targetPosition);
+    }
 
     // 3. education Select：点 trigger → 等 popup → 点选项
     await this.page.locator("#education").click();

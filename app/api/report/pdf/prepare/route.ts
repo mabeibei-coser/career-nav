@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "请求体解析失败" }, { status: 400 });
   }
   const reportData = body?.reportData;
-  if (!reportData?.meta?.formData?.targetPosition) {
+  if (!reportData?.meta?.formData?.identity) {
     return NextResponse.json({ error: "缺少 reportData" }, { status: 400 });
   }
   const token = putReportData(reportData);

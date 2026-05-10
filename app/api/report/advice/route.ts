@@ -88,7 +88,9 @@ ${APPLICANT_BASELINE}
     - "下周完成 3 次模拟自我介绍录音，每次控制在 90 秒内"
 - 不指名具体公司、培训机构、政府服务名称
 - 不要出现 MBTI / 大五 / 霍兰德等专有名词
-- graduate 身份：建议偏"积累入门经验、考相关证书"；jobseeker 身份：建议偏"梳理过往经历、面试节奏感"，不嘲讽空白期
+- recent_grad（离校未就业）：建议偏"找到第一份工作的关键步骤"，重点强调校招/见习/实习途径、积累首份经历、考相关证书
+- young_unemployed（35岁以下失业青年）：建议偏"快速再就业"，可提政府公益培训（通用表达，不指名机构），不嘲讽空白期
+- general_unemployed（一般失业人员）：建议偏"用过往经历快速找到匹配岗位"，不嘲讽空白期，强调务实可落地
 - 不写黄浦/上海具体资源链接（用户决策不接黄浦资源）；可在 applyDirection 里以"上海公共招聘网"作通用引导，但仅作为渠道之一
 
 输出 JSON schema:
@@ -181,12 +183,12 @@ export async function POST(req: NextRequest) {
     formData = body?.formData as JobFormData | undefined;
     scoring = body?.scoring as ScoringResult | undefined;
 
-    if (!formData?.targetPosition || !formData?.identity) {
+    if (!formData?.identity) {
       return NextResponse.json(
         {
           data: MOCK_ADVICE,
           source: "mock" as const,
-          errorMessage: "缺少表单关键字段（targetPosition / identity）",
+          errorMessage: "缺少表单关键字段（identity）",
         },
         { status: 200 }
       );

@@ -1,17 +1,17 @@
 import type { UserIdentity } from "./types";
 
 export const USER_IDENTITY_OPTIONS: { value: UserIdentity; label: string; description: string }[] = [
-  { value: "graduate", label: "应届毕业生", description: "在校大学生或毕业 2 年内" },
-  { value: "jobseeker", label: "求职/失业中", description: "已离开学校，正在找工作或失业中" },
+  { value: "recent_grad", label: "离校未就业", description: "毕业后尚未找到第一份工作" },
+  { value: "young_unemployed", label: "35岁以下失业青年", description: "35周岁以下，曾有工作经历，目前失业" },
+  { value: "general_unemployed", label: "一般失业人员", description: "有工作经历，当前正在求职中" },
 ];
 
 export const EDUCATION_OPTIONS = [
-  { value: "high_school", label: "高中及以下" },
-  { value: "junior_college", label: "大专" },
+  { value: "junior_high", label: "初中及以下" },
+  { value: "high_school", label: "高中/中专/技校" },
+  { value: "junior_college", label: "高职/大专" },
   { value: "bachelor", label: "本科" },
-  { value: "master", label: "硕士" },
-  { value: "phd", label: "博士" },
-  { value: "other", label: "其他" },
+  { value: "master_plus", label: "硕士及以上" },
 ];
 
 export const WORK_YEARS_OPTIONS = [

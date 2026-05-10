@@ -28,13 +28,10 @@ import { clearBgSections } from "@/lib/report-bg-runner";
 import type { JobFormData, UserIdentity } from "@/lib/types";
 
 const formSchema = z.object({
-  identity: z.enum(["graduate", "jobseeker"], {
+  identity: z.enum(["recent_grad", "young_unemployed", "general_unemployed"], {
     error: "请选择当前身份",
   }),
-  targetPosition: z
-    .string()
-    .min(1, "请输入目标岗位")
-    .max(60, "岗位名称过长"),
+  targetPosition: z.string().max(60, "岗位名称过长").optional(),
   education: z.string().min(1, "请选择最高学历"),
   workYears: z.string().min(1, "请选择工作年限"),
 });
@@ -104,7 +101,7 @@ export default function FormPage() {
     setIsSubmitting(true);
     const payload: JobFormData = {
       identity: data.identity as UserIdentity,
-      targetPosition: data.targetPosition,
+      targetPosition: data.targetPosition ?? "",
       education: data.education,
       workYears: data.workYears,
       resumeText: resume?.text,
@@ -205,7 +202,7 @@ export default function FormPage() {
                 <span className="text-red-400 text-xs">*</span>
               </Label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 {USER_IDENTITY_OPTIONS.map((opt) => {
                   const active = selectedIdentity === opt.value;
                   return (
@@ -287,8 +284,7 @@ export default function FormPage() {
                     <path d="M7 7h6M7 10h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                   </svg>
                 </span>
-                目标岗位
-                <span className="text-red-400 text-xs">*</span>
+                目标岗位（选填）
               </Label>
               <Input
                 id="targetPosition"
@@ -342,7 +338,11 @@ export default function FormPage() {
                   id="education"
                   className="w-full h-11 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all data-[placeholder]:text-[var(--muted-foreground)]/50"
                 >
-                  <SelectValue placeholder="选择最高学历" />
+                  <SelectValue placeholder="选择最高学历">
+                    {watchedValues.education
+                      ? (EDUCATION_OPTIONS.find((o) => o.value === watchedValues.education)?.label ?? "选择最高学历")
+                      : "选择最高学历"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
                   {EDUCATION_OPTIONS.map((opt) => (
@@ -398,7 +398,11 @@ export default function FormPage() {
                   id="workYears"
                   className="w-full h-11 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all data-[placeholder]:text-[var(--muted-foreground)]/50"
                 >
-                  <SelectValue placeholder="选择工作年限" />
+                  <SelectValue placeholder="选择工作年限">
+                    {watchedValues.workYears
+                      ? (WORK_YEARS_OPTIONS.find((o) => o.value === watchedValues.workYears)?.label ?? "选择工作年限")
+                      : "选择工作年限"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
                   {WORK_YEARS_OPTIONS.map((opt) => (
@@ -450,22 +454,6 @@ export default function FormPage() {
                 accept=".pdf,.doc,.docx"
                 maxSizeMB={5}
               />
-              <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50/80 px-3 py-2 text-xs text-amber-900 leading-relaxed">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  className="mt-0.5 shrink-0 text-amber-600"
-                  aria-hidden
-                >
-                  <path d="M7 1.5L1 12.5h12L7 1.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-                  <path d="M7 6v2.5M7 10.5h.005" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                </svg>
-                <span>
-                  <strong className="font-semibold">隐私提示</strong>：敏感信息（如身份证号、家庭住址）建议手动遮盖后再上传。
-                </span>
-              </div>
             </div>
           </motion.div>
 

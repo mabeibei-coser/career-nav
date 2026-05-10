@@ -16,7 +16,7 @@ import { ReportPage } from "../pages/report.page";
 
 // 移动端进入题目和访谈题切换稍慢，给宽裕一点
 test.describe("完整流程：form → quiz → interview → report", () => {
-  test("graduate 身份跑通", async ({ page, isMobile }) => {
+  test("recent_grad 身份跑通", async ({ page, isMobile }) => {
     test.setTimeout(isMobile ? 240_000 : 180_000);
 
     const form = new FormPage(page);
@@ -27,7 +27,7 @@ test.describe("完整流程：form → quiz → interview → report", () => {
 
     await form.goto();
     await form.fill({
-      identity: "graduate",
+      identity: "recent_grad",
       targetPosition: "客户服务专员",
       education: "bachelor",
       workYears: "none",
@@ -53,7 +53,7 @@ test.describe("完整流程：form → quiz → interview → report", () => {
     await report.assertRadarsPresent();
   });
 
-  test("jobseeker 身份跑通", async ({ page, isMobile }) => {
+  test("general_unemployed 身份跑通", async ({ page, isMobile }) => {
     test.setTimeout(isMobile ? 240_000 : 180_000);
 
     const form = new FormPage(page);
@@ -64,7 +64,7 @@ test.describe("完整流程：form → quiz → interview → report", () => {
 
     await form.goto();
     await form.fill({
-      identity: "jobseeker",
+      identity: "general_unemployed",
       targetPosition: "行政人事助理",
       education: "junior_college",
       workYears: "1to3",
@@ -100,7 +100,7 @@ test.describe("完整流程：form → quiz → interview → report", () => {
     await form.goto();
     // 显式不传 resumeFileName
     await form.fill({
-      identity: "graduate",
+      identity: "recent_grad",
       targetPosition: "数据分析师",
       education: "master",
       workYears: "none",

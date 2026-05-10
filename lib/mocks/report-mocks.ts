@@ -20,10 +20,10 @@ export const MOCK_OVERVIEW: Overview = {
       "你是一个倾向于先观察再行动的人，做事讲究稳妥与条理，不容易被情绪带偏。在熟悉的流程里你能稳定输出，遇到模糊状况会更倾向先收集信息再下手。这种风格在需要长期积累、注重合规的岗位上很有底色优势。",
   },
   fourDimRadar: [
-    { name: "性格底色", score: 70 },
-    { name: "工作风格", score: 65 },
-    { name: "价值驱动", score: 75 },
-    { name: "适配方向", score: 60 },
+    { name: "性格底色", score: 70, conclusion: "倾向安静观察，表达较为含蓄" },
+    { name: "工作风格", score: 65, conclusion: "条理清晰，执行稳健，节奏偏稳" },
+    { name: "价值驱动", score: 75, conclusion: "在意稳定与成长，对意义感有要求" },
+    { name: "适配方向", score: 60, conclusion: "信息处理耐心，压力承受中等" },
   ],
   summary:
     "整体来看，你属于「稳一点先做对、再做快」的类型：有耐心、有责任感，适合面向流程清晰、强调可靠性的岗位。短期建议把「主动表达」和「接受不完美的快节奏」作为练习方向，既能放大你的稳重优势，也能让你在团队里被更多人看见。",
@@ -80,6 +80,15 @@ export const MOCK_POSITIONING: Positioning = {
     industries: ["商业银行支行", "保险经代公司", "持牌消费金融"],
     culture: "稳定流程导向 / 重合规 / 师徒带教制",
     teamRole: "执行支持型",
+    coreResponsibilities: ["接待来电/到访客户", "解答产品与业务问题", "维护客户档案与跟进"],
+    coreCompetencies: [
+      { name: "沟通表达", score: 75 },
+      { name: "耐心服务", score: 80 },
+      { name: "合规意识", score: 70 },
+      { name: "学习能力", score: 65 },
+    ],
+    fitReason:
+      "你的稳重底色和耐心特质与金融机构客服岗高度吻合，流程清晰、合规导向的环境也能让你发挥所长。",
   },
   secondary: {
     position: "行政与人事助理",
@@ -89,6 +98,15 @@ export const MOCK_POSITIONING: Positioning = {
     industries: ["中小型科技公司", "本地民营企业总部", "外资企业上海办公室"],
     culture: "节奏适中 / 服务内部客户为主 / 重视细致与口碑",
     teamRole: "事务支持 + 信息中转",
+    coreResponsibilities: ["协调日常行政事务", "跟进招聘与入职流程", "维护人事档案与数据"],
+    coreCompetencies: [
+      { name: "细节把控", score: 75 },
+      { name: "多任务协调", score: 65 },
+      { name: "沟通协作", score: 70 },
+      { name: "信息处理", score: 60 },
+    ],
+    fitReason:
+      "行政人事助理的事务型工作与你的执行风格契合，且能通过内部服务积累人脉和对公司运作的理解。",
   },
 };
 
@@ -178,7 +196,7 @@ export const MOCK_ADVICE: Advice = {
 
 // 元信息 mock：构造一份完整的 ReportMeta
 const MOCK_FORM_DATA: JobFormData = {
-  identity: "jobseeker",
+  identity: "general_unemployed",
   targetPosition: "客户服务专员",
   education: "本科",
   workYears: "1-3 年",

@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       resumeFilename,
     } = body ?? {};
 
-    if (!formData?.targetPosition) {
+    if (!formData?.identity) {
       return NextResponse.json({ error: "缺少 formData" }, { status: 400 });
     }
     if (!reportData) {

@@ -21,11 +21,11 @@ const cubicEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 // 5 级 Likert 标签 + 对应 raw 值（1-5）
 const LIKERT_LEVELS: { value: 1 | 2 | 3 | 4 | 5; label: string }[] = [
-  { value: 1, label: "非常不同意" },
-  { value: 2, label: "不同意" },
-  { value: 3, label: "中立" },
-  { value: 4, label: "同意" },
-  { value: 5, label: "非常同意" },
+  { value: 1, label: "完全不像我" },
+  { value: 2, label: "不太符合" },
+  { value: 3, label: "有时如此" },
+  { value: 4, label: "比较符合" },
+  { value: 5, label: "完全符合" },
 ];
 
 const AUTO_NEXT_DELAY_MS = 300;
@@ -40,7 +40,7 @@ function readFormData(): JobFormData | null {
     const saved = sessionStorage.getItem("formData");
     if (!saved) return null;
     const parsed = JSON.parse(saved) as JobFormData;
-    if (!parsed.targetPosition) return null;
+    if (!parsed.identity) return null; // identity 是必填项
     return parsed;
   } catch {
     return null;
@@ -77,13 +77,15 @@ export default function QuizPage() {
   const [submitting, setSubmitting] = useState(false);
   const autoNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 拉题（GET /api/quiz/bank）
-  const fetchBank = useCallback(async () => {
+  // 拉题（POST /api/quiz/bank，携带 identity 做身份分流）
+  const fetchBank = useCallback(async (identity?: string) => {
     setLoading(true);
     setLoadError(null);
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/quiz/bank`, {
-        method: "GET",
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identity: identity ?? "general_unemployed" }),
         cache: "no-store",
       });
       if (!res.ok) {
@@ -126,7 +128,7 @@ export default function QuizPage() {
     setFormData(fd);
     setAnswers(readSavedAnswers());
     router.prefetch("/interview");
-    void fetchBank();
+    void fetchBank(fd.identity);
   }, [router, fetchBank]);
 
   // 卸载时清掉自动跳题定时器
@@ -236,7 +238,7 @@ export default function QuizPage() {
               返回填写信息
             </Button>
             <Button
-              onClick={() => void fetchBank()}
+              onClick={() => void fetchBank(formData?.identity)}
               className="bg-[var(--blue-500)] hover:bg-[var(--blue-600)]"
             >
               重试
@@ -344,7 +346,7 @@ export default function QuizPage() {
                         )}
                       </div>
 
-                      <div className="flex-1 flex items-center justify-between gap-3">
+                      <div className="flex-1 flex items-center">
                         <span
                           className={cn(
                             "text-[15px] sm:text-base leading-relaxed",
@@ -354,16 +356,6 @@ export default function QuizPage() {
                           )}
                         >
                           {level.label}
-                        </span>
-                        <span
-                          className={cn(
-                            "shrink-0 text-xs tabular-nums",
-                            active
-                              ? "text-[var(--blue-600)]"
-                              : "text-[var(--muted-foreground)]",
-                          )}
-                        >
-                          {level.value} 分
                         </span>
                       </div>
                     </button>

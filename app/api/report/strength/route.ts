@@ -78,7 +78,7 @@ ${APPLICANT_BASELINE}
 - strengths 要从简历找具体证据（如某项工作经历、技能描述）；如果简历空缺，从 ability 高分维度泛说
 - 极端值平滑：ability < 30 的能力在 growth 区出现时，措辞用"还在打基础"，不出现具体数字
 - 不出现 MBTI / 大五 / 霍兰德等专有名词
-- 身份适配：graduate 重点说"潜力"；jobseeker 重点说"已积累的经验"，不嘲讽空白期
+- 身份适配：recent_grad（离校未就业）重点说"潜力"；young_unemployed / general_unemployed 重点说"已积累的经验"，不嘲讽空白期
 
 输出 JSON: { "abilityRadar": [...], "strengths": [...], "growth": [...] }`;
 
@@ -106,12 +106,12 @@ export async function POST(req: NextRequest) {
     };
     scoring = scoringInput;
 
-    if (!formData?.targetPosition) {
+    if (!formData?.identity) {
       // 入参不全也不 5xx，直接 mock 兜底
       return NextResponse.json({
         data: MOCK_STRENGTH,
         source: "mock",
-        errorMessage: "缺少意向信息（formData.targetPosition）",
+        errorMessage: "缺少意向信息（formData.identity）",
       });
     }
     if (

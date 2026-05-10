@@ -111,7 +111,7 @@ export default function ReportPage() {
       formData = JSON.parse(fd) as JobFormData;
       quizAnswers = JSON.parse(qa) as QuizAnswer[];
       scoring = JSON.parse(sc) as ScoringResult;
-      if (!formData?.targetPosition) {
+      if (!formData?.identity) {
         router.replace("/form");
         return;
       }
@@ -140,7 +140,7 @@ export default function ReportPage() {
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as ReportData;
-        if (parsed?.meta?.formData?.targetPosition) {
+        if (parsed?.meta?.formData?.identity) {
           setSections({
             overview: { data: parsed.overview ?? null, status: "done" },
             strength: { data: parsed.strength ?? null, status: "done" },
@@ -311,7 +311,12 @@ export default function ReportPage() {
   const dateLabel = new Date(meta.generatedAt).toLocaleDateString("zh-CN");
   const position = meta.formData.targetPosition;
   const hasResume = meta.hasResume;
-  const identityLabel = meta.formData.identity === "graduate" ? "应届毕业生" : "求职中";
+  const identityLabel =
+    meta.formData.identity === "recent_grad"
+      ? "离校未就业"
+      : meta.formData.identity === "young_unemployed"
+        ? "35岁以下失业青年"
+        : "一般失业人员";
 
   // 装配 ReportData（用于 ExportActions / PDF 导出，可能含 mock）
   const composedReport: ReportData = {
@@ -339,7 +344,7 @@ export default function ReportPage() {
                 variant="secondary"
                 className="bg-[var(--blue-500)] text-white text-xs"
               >
-                职业定位报告
+                职业导航报告
               </Badge>
               <Badge variant="secondary" className="bg-white text-xs">
                 {position}
@@ -362,7 +367,7 @@ export default function ReportPage() {
               )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-[var(--navy-950)] tracking-tight mb-2">
-              {position} · 职业定位报告
+              {position} · 职业导航报告
             </h1>
             <p className="text-xs sm:text-sm text-[var(--report-ink-muted)]">
               生成于 {dateLabel} · 共 5 个模块

@@ -79,7 +79,7 @@ const TIPS_GRADUATE: string[] = [
 ];
 
 function pickTips(identity: UserIdentity | null): string[] {
-  if (identity === "graduate") return TIPS_GRADUATE;
+  if (identity === "recent_grad") return TIPS_GRADUATE;
   return TIPS_JOBSEEKER;
 }
 
@@ -97,7 +97,7 @@ function RotatingTips({ identity }: { identity: UserIdentity | null }) {
     return () => clearInterval(id);
   }, [tips.length]);
 
-  const tagLabel = identity === "graduate" ? "校招路上的小提示" : "陪你慢慢来";
+  const tagLabel = identity === "recent_grad" ? "求职路上的小提示" : "陪你慢慢来";
 
   return (
     <div className="relative rounded-2xl border border-[var(--blue-200)] bg-gradient-to-br from-white via-[var(--blue-50)]/40 to-white p-4 sm:p-5 overflow-hidden">

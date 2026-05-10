@@ -51,10 +51,14 @@ function shuffle<T>(arr: readonly T[]): T[] {
 /**
  * 每维度抽 perDimension 题，返回扁平数组
  * 顺序：先按 DIMENSION_ORDER 固定维度顺序，再每维内随机
+ *
+ * @param contextFilter 身份过滤标签列表，如 ["all", "grad"] 或 ["all", "work"]；
+ *   传 undefined 则不过滤（兼容旧调用方）
  */
 export function sampleQuestions(
   bank: QuizBank,
   perDimension = 2,
+  contextFilter?: string[],
 ): QuizQuestion[] {
   const result: QuizQuestion[] = [];
   for (const key of DIMENSION_ORDER) {
@@ -62,12 +66,18 @@ export function sampleQuestions(
     if (!dim) {
       throw new Error(`抽样失败：维度 ${key} 在题库中缺失`);
     }
-    if (dim.questions.length < perDimension) {
+    // 按 context 过滤（无 context 字段的题默认视为 "all"）
+    const eligible = contextFilter
+      ? dim.questions.filter(
+          (q) => !q.context || contextFilter.includes(q.context),
+        )
+      : dim.questions;
+    if (eligible.length < perDimension) {
       throw new Error(
-        `抽样失败：维度 ${key} 题目数 ${dim.questions.length} < perDimension ${perDimension}`,
+        `抽样失败：维度 ${key} 过滤后题目数 ${eligible.length} < perDimension ${perDimension}`,
       );
     }
-    const shuffled = shuffle(dim.questions);
+    const shuffled = shuffle(eligible);
     result.push(...shuffled.slice(0, perDimension));
   }
   return result;
