@@ -42,25 +42,39 @@ export async function warmQuizCache(): Promise<void> {
     return;
   }
 
-  console.log(`[quiz-warmup] warming ${combos.length} combo(s) in background...`);
+  console.log(`[quiz-warmup] warming ${combos.length} combo(s) serially...`);
 
-  // 每批 5 个并发（避免 DeepSeek 限速），共 3 批
-  const BATCH = 5;
-  for (let i = 0; i < combos.length; i += BATCH) {
-    const batch = combos.slice(i, i + BATCH);
-    await Promise.allSettled(
-      batch.map(async ({ identity, education }) => {
-        const key = makeQuizCacheKey(identity, education);
-        try {
-          const questions = await generateSJTQuestions({ identity, education });
-          setToQuizCache(key, questions);
-          console.log(`[quiz-warmup] ✓ warmed: ${key}`);
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          console.warn(`[quiz-warmup] ✗ failed: ${key} — ${msg}`);
-        }
-      })
-    );
+  // 串行执行：避免并发触发 DeepSeek 限速
+  // 15 × ~16s ≈ 4 分钟后台完成，不影响用户请求
+  const failed: typeof combos = [];
+  for (const { identity, education } of combos) {
+    const key = makeQuizCacheKey(identity, education);
+    try {
+      const questions = await generateSJTQuestions({ identity, education });
+      setToQuizCache(key, questions);
+      console.log(`[quiz-warmup] ✓ ${key}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[quiz-warmup] ✗ ${key} — ${msg}`);
+      failed.push({ identity, education });
+    }
+  }
+
+  // 对失败的 combo 逐个重试一次（等 10s 后，避免短时限速）
+  if (failed.length > 0) {
+    console.log(`[quiz-warmup] retrying ${failed.length} failed combo(s) in 10s...`);
+    await new Promise((r) => setTimeout(r, 10_000));
+    for (const { identity, education } of failed) {
+      const key = makeQuizCacheKey(identity, education);
+      try {
+        const questions = await generateSJTQuestions({ identity, education });
+        setToQuizCache(key, questions);
+        console.log(`[quiz-warmup] ✓ retry ok: ${key}`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[quiz-warmup] ✗ retry failed: ${key} — ${msg}`);
+      }
+    }
   }
 
   console.log("[quiz-warmup] done");
