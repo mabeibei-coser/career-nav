@@ -31,8 +31,20 @@ function getCache(): Map<string, CacheEntry> {
   return global.__quizCache;
 }
 
-export function makeQuizCacheKey(identity?: string, education?: string): string {
-  return `${identity ?? "unknown"}:${education ?? "unknown"}`;
+/**
+ * 生成缓存 key。
+ * - 不传 targetPosition → 通用 key（预热用，用作个性化生成失败时的兜底）
+ * - 传 targetPosition   → 个性化 key（按真实用户目标岗位区分）
+ */
+export function makeQuizCacheKey(
+  identity?: string,
+  education?: string,
+  targetPosition?: string,
+): string {
+  const base = `${identity ?? "unknown"}:${education ?? "unknown"}`;
+  const pos = targetPosition?.trim();
+  if (!pos) return base;
+  return `${base}:${pos.slice(0, 30)}`; // cap 防 key 过长
 }
 
 export function getFromQuizCache(key: string): QuizQuestion[] | null {

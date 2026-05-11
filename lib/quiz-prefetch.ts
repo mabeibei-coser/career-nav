@@ -16,9 +16,11 @@ interface PrefetchState {
 
 let pending: PrefetchState | null = null;
 
-/** 用 identity + education 作 key（与服务端缓存 key 保持一致） */
+/** 用 identity + education + targetPosition 作 key（与服务端缓存 key 保持一致） */
 function makeKey(fd: JobFormData): string {
-  return `${fd.identity ?? ""}:${fd.education ?? ""}`;
+  const base = `${fd.identity ?? ""}:${fd.education ?? ""}`;
+  const pos = fd.targetPosition?.trim();
+  return pos ? `${base}:${pos.slice(0, 30)}` : base;
 }
 
 /**
