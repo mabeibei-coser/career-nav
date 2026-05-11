@@ -71,21 +71,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 缓存未命中 → 调用 LLM
-  try {
-    const questions = await generateSJTQuestions(formData);
-    setToCache(cacheKey, questions);
-    return NextResponse.json(
-      { questions, version: "llm" },
-      { headers: { "Cache-Control": "no-store" } },
-    );
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "generated load failed";
-    console.error("[api/quiz/bank/generated] LLM failed, using fallback:", msg);
-    // fallback 不写缓存，让下次重试 LLM
-    return NextResponse.json(
-      { questions: FALLBACK_GENERATED, version: "fallback" },
-      { headers: { "Cache-Control": "no-store" } },
-    );
-  }
+  // 缓存未命中 → 立即返回 FALLBACK，后台异步 warming 缓存（stale-while-revalidate）
+  // 原因：LLM 双链路各自有超时（DeepSeek 20s + 讯飞兜底），串行等待对用户不可接受。
+  // 部署在 VPS（PM2 常驻进程），fire-and-forget Promise 在响应发出后仍继续执行。
+  // 下次同一 identity+education 请求命中缓存，0ms 返回 LLM 题目。
+  generateSJTQuestions(formData)
+    .then((questions) => {
+      setToCache(cacheKey, questions);
+      console.log(`[api/quiz/bank/generated] cache warmed: ${cacheKey}`);
+    })
+    .catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[api/quiz/bank/generated] bg warm failed (${cacheKey}): ${msg}`);
+    });
+
+  return NextResponse.json(
+    { questions: FALLBACK_GENERATED, version: "warming" },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
