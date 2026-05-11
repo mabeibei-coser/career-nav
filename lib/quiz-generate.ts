@@ -176,11 +176,13 @@ communication / collaboration / execution / learning / data / stress
   const result = await callWithFallback<LLMSimpleBank>({
     systemPrompt,
     userPrompt,
-    maxTokens: 1200,
+    // deepseek-v4-flash（推理模型）会先用 2000-2586 reasoning tokens 思考，
+    // 导致 JSON 输出被截断（finish_reason:length），耗时>50s，完全不适用。
+    // deepseek-chat（非推理模型）：0 reasoning tokens，659 output tokens，11.7s 完成。
+    deepseekModel: "deepseek-chat",
+    maxTokens: 2000,    // chat 实测只用 659 tokens，2000 有充足余量
     temperature: 0.7,
-    // deepseek-v4-flash 实测 ~15s 完成；deepseek-chat 反而需要 ~20s（token 多）
-    // 超时从 20s → 30s，给 15s 实际耗时留 15s 的网络抖动余量
-    timeoutMs: 30_000,
+    timeoutMs: 30_000,  // 11.7s 实际耗时，30s 足够
     validator: validateSimpleBank,
     context: "quiz/bank/SJT-generate",
   });
