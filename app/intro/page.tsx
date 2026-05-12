@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, ListChecks, Mic, Sparkles } from "lucide-react";
+import { ArrowRight, ListChecks, Mic } from "lucide-react";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import { playWithBlessedAudio, stopBlessedAudio } from "@/lib/audio-bless";
 import { Button } from "@/components/ui/button";
 import type { InterviewQuestion, JobFormData } from "@/lib/types";
 
 const INTRO_TEXT =
-  "你好，我是你的 AI 职业定位助理。接下来我们一起完成两个环节：第一，为你定制的性格测试量表；第二，AI 语音访谈。你准备好了吗？准备好了，我们就开始测评。";
+  "你好，我是你的 AI 职业助理。接下来我们一起完成两个环节：第一，职业导航自测；第二，AI 语音访谈。你准备好了吗？准备好了，我们就开始测评。";
 
 const cubicEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -118,7 +118,7 @@ export default function IntroPage() {
           transition={{ duration: 0.6, ease: cubicEase, delay: 0.2 }}
           className="text-xl sm:text-2xl font-bold text-[var(--navy-900)] mb-2 tracking-tight text-center px-2"
         >
-          你好，我是你的 AI 职业定位助理
+          你好，我是你的 AI 职业助理
         </motion.h1>
 
         <motion.p
@@ -142,12 +142,6 @@ export default function IntroPage() {
             <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--blue-300)]/60 to-transparent" />
 
             <div className="relative p-5 sm:p-6">
-              {/* Timeline spine */}
-              <div
-                className="absolute w-px bg-gradient-to-b from-[var(--blue-300)] via-[var(--blue-200)] to-[var(--blue-100)]"
-                style={{ left: "1.375rem", top: "3.75rem", height: "4.25rem" }}
-              />
-
               {/* Step 1 */}
               <motion.div
                 initial={{ opacity: 0, x: -8 }}
@@ -156,25 +150,15 @@ export default function IntroPage() {
                 className="flex gap-3.5 relative mb-7"
               >
                 <div className="shrink-0 relative z-10">
-                  <div className="size-[2.125rem] rounded-lg bg-gradient-to-br from-[var(--blue-500)] to-[var(--blue-600)] text-white flex items-center justify-center shadow-md shadow-blue-500/20">
-                    <ListChecks className="size-[17px]" strokeWidth={1.8} />
-                  </div>
+                  <ListChecks className="size-5 text-[var(--blue-500)]" strokeWidth={1.8} />
                 </div>
                 <div className="pt-px min-w-0">
                   <span className="inline-block text-[10px] font-mono font-semibold text-[var(--blue-400)]/80 tracking-[0.16em] uppercase mb-1">
                     Step 01
                   </span>
                   <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)] leading-snug">
-                    <span className="text-[var(--blue-600)]">定制</span>
-                    性格测试量表
-                    <Sparkles
-                      className="inline-block ml-1 size-3 text-[var(--blue-400)] -translate-y-px"
-                      strokeWidth={2.2}
-                    />
+                    职业导航自测
                   </h3>
-                  <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-                    8 道量表题
-                  </p>
                 </div>
               </motion.div>
 
@@ -186,9 +170,7 @@ export default function IntroPage() {
                 className="flex gap-3.5 relative"
               >
                 <div className="shrink-0 relative z-10">
-                  <div className="size-[2.125rem] rounded-lg bg-gradient-to-br from-[var(--blue-400)] to-[var(--blue-500)] text-white flex items-center justify-center shadow-md shadow-blue-500/15">
-                    <Mic className="size-[17px]" strokeWidth={1.8} />
-                  </div>
+                  <Mic className="size-5 text-[var(--blue-500)]" strokeWidth={1.8} />
                 </div>
                 <div className="pt-px min-w-0">
                   <span className="inline-block text-[10px] font-mono font-semibold text-[var(--blue-400)]/80 tracking-[0.16em] uppercase mb-1">
@@ -197,9 +179,6 @@ export default function IntroPage() {
                   <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)] leading-snug">
                     AI 语音访谈
                   </h3>
-                  <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-                    开放式对话
-                  </p>
                 </div>
               </motion.div>
             </div>
@@ -220,7 +199,7 @@ export default function IntroPage() {
                 />
               </svg>
               <span className="text-xs text-[var(--muted-foreground)]">
-                完成后生成完整的职业评估报告
+                完成后将为您生成个性化职业导航报告
               </span>
             </motion.div>
           </div>
