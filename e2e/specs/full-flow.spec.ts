@@ -2,7 +2,7 @@
  * 全链路 happy path
  * 覆盖 Desktop Chrome / iPhone 14 (WebKit) / Pixel 7 (Chromium)
  *
- * 流程：/form → /quiz → /interview → /loading → /report
+ * 流程：/ → /quiz → /interview → /loading → /report
  *
  * E2E_MOCK_MODE=true（playwright.config.ts 自动注入）：所有 LLM API 即时返回 mock，
  * 不消耗 API 额度也不依赖 DEEPSEEK_API_KEY / IFLYTEK_API_KEY 配置。
@@ -30,7 +30,7 @@ test.describe("完整流程：form → quiz → interview → report", () => {
       identity: "recent_grad",
       targetPosition: "客户服务专员",
       education: "bachelor",
-      workYears: "none",
+      workYears: "lt1",
     });
     await form.submit();
 
@@ -103,7 +103,7 @@ test.describe("完整流程：form → quiz → interview → report", () => {
       identity: "recent_grad",
       targetPosition: "数据分析师",
       education: "master",
-      workYears: "none",
+      workYears: "lt1",
     });
     await form.submit();
 

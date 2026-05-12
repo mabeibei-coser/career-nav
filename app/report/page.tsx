@@ -105,14 +105,14 @@ export default function ReportPage() {
       const sc = sessionStorage.getItem("scoring");
       if (!fd || !qa || !sc) {
         // 任一缺失 → 回填表流程，不在 report 页显示空数据
-        router.replace("/form");
+        router.replace("/");
         return;
       }
       formData = JSON.parse(fd) as JobFormData;
       quizAnswers = JSON.parse(qa) as QuizAnswer[];
       scoring = JSON.parse(sc) as ScoringResult;
       if (!formData?.identity) {
-        router.replace("/form");
+        router.replace("/");
         return;
       }
     } catch (e) {
@@ -289,7 +289,7 @@ export default function ReportPage() {
           </div>
           <button
             type="button"
-            onClick={() => router.push("/form")}
+            onClick={() => router.push("/")}
             className="h-10 px-6 bg-[var(--blue-500)] hover:bg-[var(--blue-600)] text-white font-medium rounded-lg"
           >
             返回填写信息
@@ -433,7 +433,7 @@ export default function ReportPage() {
               try {
                 sessionStorage.removeItem("reportData");
               } catch {}
-              router.push("/form");
+              router.push("/");
             }}
           />
         )}

@@ -164,18 +164,18 @@ export default function InterviewPage() {
       const sc = sessionStorage.getItem("scoring");
       const qa = sessionStorage.getItem("quizAnswers");
       if (!fd || !sc) {
-        router.replace("/form");
+        router.replace("/");
         return;
       }
       formData = JSON.parse(fd) as JobFormData;
       scoring = JSON.parse(sc) as ScoringResult;
       quizAnswers = qa ? (JSON.parse(qa) as QuizAnswer[]) : [];
       if (!formData?.identity) {
-        router.replace("/form");
+        router.replace("/");
         return;
       }
     } catch {
-      router.replace("/form");
+      router.replace("/");
       return;
     }
 
