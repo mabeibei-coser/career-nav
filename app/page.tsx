@@ -75,6 +75,7 @@ function getSavedDefaults(): Partial<FormValues> & {
 export default function HomePage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resumeError, setResumeError] = useState(false);
   const saved = getSavedDefaults();
   const [resume, setResume] = useState<FileUploadValue | null>(saved.resume);
 
@@ -100,6 +101,10 @@ export default function HomePage() {
 
   const onSubmit = (data: FormValues) => {
     if (isSubmitting) return;
+    if (!resume?.text) {
+      setResumeError(true);
+      return;
+    }
     setIsSubmitting(true);
     blessAudio();
     const payload: JobFormData = {
@@ -156,14 +161,22 @@ export default function HomePage() {
           transition={{ duration: 0.6, ease: cubicEase }}
           className="mb-8 sm:mb-10"
         >
-          <h1 className="text-2xl sm:text-3xl font-bold text-[var(--blue-600)] mb-3 tracking-tight">
-            就业服务-智能职业导航
+          {/* Category badge */}
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--blue-500)]/8 border border-[var(--blue-500)]/12 mb-3">
+            <div className="size-1.5 rounded-full bg-[var(--blue-500)]" />
+            <span className="text-xs font-medium text-[var(--blue-600)] tracking-wide">
+              就业服务
+            </span>
+          </div>
+
+          <h1 className="text-[1.65rem] sm:text-3xl font-bold text-[var(--navy-900)] mb-3 tracking-tight leading-tight">
+            智能职业导航
           </h1>
 
-          <StepIndicator currentStep={0} compact className="mb-6" />
+          <StepIndicator currentStep={0} compact className="mb-5" />
 
           <p className="text-sm sm:text-base text-[var(--muted-foreground)] leading-relaxed">
-            花 5-8 分钟，得到一份属于你的职业方向参考。
+            仅需三步，就可以定制一份属于你的职业导航报告
           </p>
         </motion.div>
 
@@ -189,7 +202,7 @@ export default function HomePage() {
                 <span className="text-red-400 text-xs">*</span>
               </Label>
 
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 gap-2.5">
                 {USER_IDENTITY_OPTIONS.map((opt) => {
                   const active = selectedIdentity === opt.value;
                   return (
@@ -201,36 +214,32 @@ export default function HomePage() {
                       }
                       aria-pressed={active}
                       className={[
-                        "relative text-left rounded-xl border p-4 transition-all min-h-[5.5rem]",
+                        "relative text-left rounded-xl border px-4 py-3 transition-all",
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blue-500)]/40",
+                        "flex items-center justify-between gap-2",
                         active
                           ? "border-[var(--blue-500)] bg-[var(--blue-50)] shadow-sm ring-1 ring-[var(--blue-500)]/20"
                           : "border-[var(--blue-200)] bg-white/60 hover:border-[var(--blue-300)] hover:bg-white/80",
                       ].join(" ")}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="text-base font-semibold text-[var(--navy-900)]">
-                          {opt.label}
-                        </div>
-                        <span
-                          className={[
-                            "shrink-0 size-5 rounded-full border-2 flex items-center justify-center transition-colors",
-                            active
-                              ? "border-[var(--blue-500)] bg-[var(--blue-500)]"
-                              : "border-[var(--blue-300)] bg-white",
-                          ].join(" ")}
-                          aria-hidden
-                        >
-                          {active && (
-                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                              <path d="M2 5l2 2 4-4" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          )}
-                        </span>
-                      </div>
-                      <p className="mt-1.5 text-xs sm:text-sm text-[var(--muted-foreground)] leading-relaxed">
-                        {opt.description}
-                      </p>
+                      <span className="text-[15px] font-semibold text-[var(--navy-900)]">
+                        {opt.label}
+                      </span>
+                      <span
+                        className={[
+                          "shrink-0 size-5 rounded-full border-2 flex items-center justify-center transition-colors",
+                          active
+                            ? "border-[var(--blue-500)] bg-[var(--blue-500)]"
+                            : "border-[var(--blue-300)] bg-white",
+                        ].join(" ")}
+                        aria-hidden
+                      >
+                        {active && (
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                            <path d="M2 5l2 2 4-4" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
                     </button>
                   );
                 })}
@@ -430,17 +439,31 @@ export default function HomePage() {
                     <path d="M7 11h6M7 14h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                   </svg>
                 </span>
-                简历上传（选填）
+                简历上传
+                <span className="text-red-400 text-xs">*</span>
               </Label>
               <p className="text-xs text-[var(--muted-foreground)] mb-3">
-                上传后，AI 将结合你的实习、项目、技能给出更个性化的分析和简历诊断；不传也能生成报告。
+                上传后，AI 将结合你的教育、工作、项目经验，给出个性化的分析和简历诊断
               </p>
               <FileUpload
                 value={resume}
-                onChange={setResume}
+                onChange={(v) => { setResume(v); if (v) setResumeError(false); }}
                 accept=".pdf,.doc,.docx"
                 maxSizeMB={5}
               />
+              {resumeError && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xs text-red-500 mt-2 flex items-center gap-1"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M6 4v2.5M6 8h.005" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  请上传简历
+                </motion.p>
+              )}
             </div>
           </motion.div>
 
@@ -472,7 +495,7 @@ export default function HomePage() {
                 </span>
               </Button>
               <p className="text-center text-xs text-[var(--muted-foreground)] mt-3 sm:mt-4">
-                信息仅用于本次报告生成，不会存储或分享给第三方
+                以上信息仅用于本次报告生成
               </p>
           </motion.div>
         </form>

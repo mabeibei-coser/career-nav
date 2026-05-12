@@ -15,8 +15,8 @@ export const EDUCATION_OPTIONS = [
 ];
 
 export const WORK_YEARS_OPTIONS = [
-  { value: "lt1", label: "0-1 年" },
-  { value: "1to3", label: "1~3 年" },
-  { value: "3to10", label: "3~10 年" },
-  { value: "gt10", label: "10 年以上" },
+  { value: "lt1", label: "0-1年（含）" },
+  { value: "1to3", label: "1-3年（含）" },
+  { value: "3to10", label: "3-10年（含）" },
+  { value: "gt10", label: "10年以上" },
 ];
