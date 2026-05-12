@@ -169,7 +169,10 @@ export default function HomePage() {
             </span>
           </div>
 
-          <h1 className="text-[1.65rem] sm:text-3xl font-bold text-[var(--navy-900)] mb-3 tracking-tight leading-tight">
+          <h1
+            className="text-[2rem] sm:text-4xl font-bold text-[var(--navy-900)] mb-3 tracking-tight leading-tight"
+            style={{ fontFamily: '"Songti SC", "SimSun", "Noto Serif SC", serif' }}
+          >
             智能职业导航
           </h1>
 
@@ -286,7 +289,7 @@ export default function HomePage() {
                 id="targetPosition"
                 placeholder="例如：产品经理、前端工程师、行政专员"
                 {...register("targetPosition")}
-                className="h-11 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all placeholder:text-[var(--muted-foreground)]/50"
+                className="h-12 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all placeholder:text-[var(--muted-foreground)]/50"
               />
               {errors.targetPosition && (
                 <motion.p
@@ -332,7 +335,7 @@ export default function HomePage() {
               >
                 <SelectTrigger
                   id="education"
-                  className="w-full h-11 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all data-[placeholder]:text-[var(--muted-foreground)]/50"
+                  className="w-full !h-12 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all data-[placeholder]:text-[var(--muted-foreground)]/50"
                 >
                   <SelectValue placeholder="选择最高学历">
                     {watchedValues.education
@@ -392,7 +395,7 @@ export default function HomePage() {
               >
                 <SelectTrigger
                   id="workYears"
-                  className="w-full h-11 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all data-[placeholder]:text-[var(--muted-foreground)]/50"
+                  className="w-full !h-12 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all data-[placeholder]:text-[var(--muted-foreground)]/50"
                 >
                   <SelectValue placeholder="选择工作年限">
                     {watchedValues.workYears
