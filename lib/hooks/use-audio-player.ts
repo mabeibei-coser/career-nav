@@ -1,6 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  decodeAndNormalize,
+  playNormalized,
+  type PlaybackHandle,
+} from '@/lib/audio-normalizer';
 
 interface UseAudioPlayerReturn {
   play: (audioBase64: string) => void;
@@ -10,15 +15,21 @@ interface UseAudioPlayerReturn {
 
 export function useAudioPlayer(onEnded?: () => void): UseAudioPlayerReturn {
   const [isPlaying, setIsPlaying] = useState(false);
+  // Web Audio API 归一化播放句柄（主路径）
+  const handleRef = useRef<PlaybackHandle | null>(null);
+  // HTMLAudioElement 降级（URL 输入 / decodeAudioData 失败）
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const onEndedRef = useRef(onEnded);
 
-  // keep ref in sync without re-creating play/stop
   useEffect(() => {
     onEndedRef.current = onEnded;
   }, [onEnded]);
 
   const stop = useCallback(() => {
+    if (handleRef.current) {
+      handleRef.current.stop();
+      handleRef.current = null;
+    }
     const audio = audioRef.current;
     if (audio) {
       audio.pause();
@@ -43,31 +54,56 @@ export function useAudioPlayer(onEnded?: () => void): UseAudioPlayerReturn {
       // check would misidentify this as a protocol-relative URL and fail silently.
       // Fix: treat only "/letter-or-digit" paths as URLs; anything else is raw base64.
       const isUrl =
-        /^https?:/i.test(audioSrc) ||   // http:// or https://
+        /^https?:/i.test(audioSrc) || // http:// or https://
         /^\/[a-zA-Z0-9]/.test(audioSrc); // /api/... or /audio/... (not // prefix)
-      const src = isUrl ? audioSrc : "data:audio/mp3;base64," + audioSrc;
-      const audio = new Audio(src);
-      audio.volume = 1.0; // 显式 100% 音量，防止 MediaSession 首次激活时音量偏低
 
-      audio.onended = () => {
-        setIsPlaying(false);
-        audioRef.current = null;
-        onEndedRef.current?.();
-      };
+      if (isUrl) {
+        playWithFallback(audioSrc);
+        return;
+      }
 
-      audio.onerror = () => {
-        setIsPlaying(false);
-        audioRef.current = null;
-        onEndedRef.current?.();
-      };
-
-      audioRef.current = audio;
+      // Base64：先尝试 Web Audio API 归一化播放。失败（不支持 Web Audio /
+      // AudioContext 未解锁 / 解码失败）则降级到 <audio> 元素裸播。
       setIsPlaying(true);
-      audio.play().catch(() => {
-        setIsPlaying(false);
-        audioRef.current = null;
-        onEndedRef.current?.();
-      });
+      decodeAndNormalize(audioSrc)
+        .then((normalized) => {
+          if (!normalized) {
+            playWithFallback("data:audio/mp3;base64," + audioSrc);
+            return;
+          }
+          handleRef.current = playNormalized(normalized, () => {
+            handleRef.current = null;
+            setIsPlaying(false);
+            onEndedRef.current?.();
+          });
+        })
+        .catch(() => {
+          playWithFallback("data:audio/mp3;base64," + audioSrc);
+        });
+
+      function playWithFallback(src: string) {
+        const audio = new Audio(src);
+        audio.volume = 1.0; // 显式 100% 音量；归一化路径走 Web Audio gain，此处只做兜底
+
+        audio.onended = () => {
+          setIsPlaying(false);
+          audioRef.current = null;
+          onEndedRef.current?.();
+        };
+        audio.onerror = () => {
+          setIsPlaying(false);
+          audioRef.current = null;
+          onEndedRef.current?.();
+        };
+
+        audioRef.current = audio;
+        setIsPlaying(true);
+        audio.play().catch(() => {
+          setIsPlaying(false);
+          audioRef.current = null;
+          onEndedRef.current?.();
+        });
+      }
     },
     [stop],
   );
@@ -75,6 +111,8 @@ export function useAudioPlayer(onEnded?: () => void): UseAudioPlayerReturn {
   // cleanup on unmount
   useEffect(() => {
     return () => {
+      handleRef.current?.stop();
+      handleRef.current = null;
       const audio = audioRef.current;
       if (audio) {
         audio.pause();
