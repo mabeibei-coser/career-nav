@@ -3,22 +3,22 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, Briefcase, Sparkles } from "lucide-react";
+import { FileSearch, LayoutList, ShieldCheck } from "lucide-react";
+import { StepIndicator } from "@/components/ui/step-indicator";
 
 const cubicEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 const STEPS = [
-  { key: "resume", label: "正在分析您的简历", Icon: FileText },
-  { key: "jobs", label: "正在匹配岗位信息", Icon: Briefcase },
-  { key: "quiz", label: "正在为您定制测评题", Icon: Sparkles },
+  { key: "resume", label: "智能分析简历信息", Icon: FileSearch },
+  { key: "quiz", label: "智能定制测评题目", Icon: LayoutList },
+  { key: "calibrate", label: "测评题检核与校准", Icon: ShieldCheck },
 ] as const;
 
-// 时序（ms）— 总 ~6.55s，落在用户要求的 6-8s 区间偏短一侧
-const T_ENTRY = 350;
-const T_RUNNING = 1500;
-const T_DONE_HOLD = 250;
-const T_EXIT_DELAY = 400;
-const T_EXIT_DURATION = 400;
+const T_ENTRY = 600;
+const T_RUNNING = 2600;
+const T_DONE_HOLD = 350;
+const T_EXIT_DELAY = 500;
+const T_EXIT_DURATION = 450;
 
 export default function PreparingPage() {
   const router = useRouter();
@@ -28,7 +28,6 @@ export default function PreparingPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // 守卫：没填表单就直接进 /preparing 的，踢回入口
     if (!sessionStorage.getItem("formData")) {
       router.replace("/");
       return;
@@ -58,7 +57,6 @@ export default function PreparingPage() {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Layered backgrounds — 与 form 入口同色系 */}
       <div className="fixed inset-0 bg-gradient-to-br from-[var(--blue-50)] via-white to-[var(--blue-100)]" />
       <div className="fixed inset-0 hero-grid opacity-40" />
       <div className="fixed top-20 -right-32 w-96 h-96 rounded-full bg-gradient-to-br from-[var(--blue-200)] to-[var(--blue-100)] opacity-40 blur-3xl" />
@@ -72,87 +70,96 @@ export default function PreparingPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, scale: 0.985 }}
             transition={{ duration: T_EXIT_DURATION / 1000, ease: cubicEase }}
-            className="relative z-10 min-h-screen flex flex-col items-center justify-center px-6 py-10"
+            className="relative z-10 min-h-screen flex flex-col items-center px-5 py-6 sm:py-8"
           >
-            {/* Caption + 大标题 */}
+            {/* Step indicator */}
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: cubicEase, delay: 0.05 }}
-              className="text-[10px] sm:text-xs tracking-[0.32em] uppercase text-[var(--blue-500)]/75 font-semibold mb-3 flex items-center gap-2"
-              aria-hidden
+              transition={{ duration: 0.5, ease: cubicEase }}
+              className="w-full max-w-md"
             >
-              <span className="inline-block w-6 h-px bg-[var(--blue-400)]/60" />
-              Personalizing for You
-              <span className="inline-block w-6 h-px bg-[var(--blue-400)]/60" />
+              <StepIndicator currentStep={1} compact />
             </motion.div>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: cubicEase, delay: 0.15 }}
-              className="text-xl sm:text-2xl font-bold text-[var(--navy-900)] mb-10 sm:mb-12 tracking-tight text-center"
-            >
-              正在为您定制专属评估
-            </motion.h1>
+            {/* Central orb area */}
+            <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md -mt-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.88 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.7, ease: cubicEase, delay: 0.15 }}
+                className="relative w-44 h-44 sm:w-52 sm:h-52 mb-6 flex items-center justify-center"
+              >
+                <CentralOrb progress={progress} activeStep={activeStep} />
+              </motion.div>
 
-            {/* 中央 orb */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.88 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.7, ease: cubicEase, delay: 0.1 }}
-              className="relative w-44 h-44 sm:w-52 sm:h-52 mb-10 flex items-center justify-center"
-            >
-              <CentralOrb progress={progress} activeStep={activeStep} />
-            </motion.div>
+              {/* Current step caption */}
+              <div
+                className="h-7 mb-8 flex items-center justify-center"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <AnimatePresence mode="wait">
+                  {activeStep >= 0 && (
+                    <motion.div
+                      key={`${activeStep}-${doneCount > activeStep ? "done" : "run"}`}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.32, ease: cubicEase }}
+                      className="text-sm sm:text-base font-medium text-[var(--navy-700)] tracking-wide"
+                    >
+                      {doneCount > activeStep
+                        ? `${STEPS[activeStep].label} · 完成`
+                        : STEPS[activeStep].label}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
-            {/* 当前步骤大字 caption（live region：让 a11y 也能感受到进展） */}
-            <div
-              className="h-7 mb-7 sm:mb-8 flex items-center justify-center"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              <AnimatePresence mode="wait">
-                {activeStep >= 0 && (
-                  <motion.div
-                    key={`${activeStep}-${doneCount > activeStep ? "done" : "run"}`}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.32, ease: cubicEase }}
-                    className="text-sm sm:text-base font-medium text-[var(--navy-700)] tracking-wide"
-                  >
-                    {doneCount > activeStep
-                      ? `已完成 · ${STEPS[activeStep].label.replace("正在", "")}`
-                      : STEPS[activeStep].label}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {/* Steps card */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: cubicEase, delay: 0.25 }}
+                className="w-full"
+              >
+                <div className="relative rounded-2xl bg-white/50 backdrop-blur-sm border border-white/70 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_8px_32px_rgba(59,130,246,0.06)] overflow-hidden">
+                  <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--blue-300)]/60 to-transparent" />
+
+                  <div className="p-4 sm:p-5 space-y-0.5">
+                    {STEPS.map((step, i) => (
+                      <StepRow
+                        key={step.key}
+                        index={i}
+                        step={step}
+                        active={activeStep === i && doneCount <= i}
+                        done={doneCount > i}
+                        pending={activeStep < i}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Progress bar footer */}
+                  <div className="px-4 sm:px-5 pb-4 sm:pb-5">
+                    <div className="h-1.5 rounded-full bg-[var(--blue-100)]/80 overflow-hidden">
+                      <motion.div
+                        className="h-full rounded-full bg-gradient-to-r from-[var(--blue-400)] to-[var(--blue-500)]"
+                        initial={{ width: "0%" }}
+                        animate={{ width: `${progress * 100}%` }}
+                        transition={{ duration: 0.8, ease: cubicEase }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-2">
+                      <span className="text-[11px] text-[var(--muted-foreground)]/70">准备中</span>
+                      <span className="text-[11px] text-[var(--muted-foreground)]/70">
+                        {Math.round(progress * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
             </div>
-
-            {/* 三步列表 */}
-            <div className="w-full max-w-sm space-y-1.5">
-              {STEPS.map((step, i) => (
-                <StepRow
-                  key={step.key}
-                  index={i}
-                  step={step}
-                  active={activeStep === i && doneCount <= i}
-                  done={doneCount > i}
-                  pending={activeStep < i}
-                />
-              ))}
-            </div>
-
-            {/* 小尾巴说明 */}
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.7, delay: 0.6 }}
-              className="mt-10 text-[11px] text-[var(--muted-foreground)]/70 tracking-wide text-center max-w-xs"
-            >
-              基于你的身份与岗位意向，正在生成专属题目
-            </motion.p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -160,7 +167,6 @@ export default function PreparingPage() {
   );
 }
 
-/* ─── 中央 orb：进度环 + 双层装饰环 + 呼吸光晕 + 中心 disc + active icon ─── */
 function CentralOrb({
   progress,
   activeStep,
@@ -177,28 +183,24 @@ function CentralOrb({
 
   return (
     <div className="relative w-full h-full flex items-center justify-center">
-      {/* Outer breathing glow */}
       <motion.div
         animate={{ scale: [1, 1.1, 1], opacity: [0.55, 0.25, 0.55] }}
         transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
         className="absolute inset-2 rounded-full bg-gradient-to-br from-[var(--blue-300)] to-[var(--blue-400)] blur-2xl"
       />
 
-      {/* Decorative dashed ring (slow CW) */}
       <motion.div
         animate={{ rotate: 360 }}
         transition={{ duration: 22, repeat: Infinity, ease: "linear" }}
         className="absolute inset-2 rounded-full border border-dashed border-[var(--blue-400)]/40"
       />
 
-      {/* Inner thin ring (slow CCW) */}
       <motion.div
         animate={{ rotate: -360 }}
         transition={{ duration: 32, repeat: Infinity, ease: "linear" }}
         className="absolute inset-7 rounded-full border border-[var(--blue-200)]/70"
       />
 
-      {/* Progress arc */}
       <svg
         width={size}
         height={size}
@@ -235,7 +237,6 @@ function CentralOrb({
         />
       </svg>
 
-      {/* Inner glassy disc holding the active icon */}
       <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-white/85 backdrop-blur-md shadow-xl shadow-blue-500/15 flex items-center justify-center ring-1 ring-white/70">
         <AnimatePresence mode="wait">
           {Icon && (
@@ -256,7 +257,6 @@ function CentralOrb({
   );
 }
 
-/* ─── 单行步骤 ─── */
 function StepRow({
   index,
   step,
@@ -293,12 +293,11 @@ function StepRow({
             : "transparent",
       }}
     >
-      {/* 左侧状态点 */}
       <div className="relative shrink-0">
         <motion.div
           animate={{
             backgroundColor: done
-              ? "rgb(16,185,129)" // emerald-500
+              ? "rgb(16,185,129)"
               : active
                 ? "var(--blue-500)"
                 : "var(--blue-100)",
@@ -306,7 +305,6 @@ function StepRow({
           transition={{ duration: 0.4, ease: cubicEase }}
           className="w-9 h-9 rounded-full flex items-center justify-center relative overflow-hidden"
         >
-          {/* Running 时的扫光 */}
           {active && !done && (
             <motion.div
               animate={{ rotate: 360 }}
@@ -359,7 +357,6 @@ function StepRow({
           </AnimatePresence>
         </motion.div>
 
-        {/* 完成时的扩散光圈 */}
         {done && (
           <motion.div
             initial={{ opacity: 0.55, scale: 1 }}
@@ -370,12 +367,11 @@ function StepRow({
         )}
       </div>
 
-      {/* 中间文案 */}
       <div className="flex-1 min-w-0">
         <motion.div
           animate={{
             color: done
-              ? "rgb(6,95,70)" // emerald-900
+              ? "rgb(6,95,70)"
               : active
                 ? "var(--navy-900)"
                 : "var(--navy-700)",
@@ -388,7 +384,6 @@ function StepRow({
         {active && !done && <DotsPulse />}
       </div>
 
-      {/* 右侧状态 */}
       <div className="text-[11px] sm:text-xs tracking-wide shrink-0 min-w-[2.5rem] text-right">
         {done && (
           <motion.span
