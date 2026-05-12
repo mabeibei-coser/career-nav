@@ -461,11 +461,13 @@ export default function LoadingPage() {
           },
         });
 
-        // 超时已触发：用户已经看到 timeout UI（可能也点了"使用示例报告"已跳走）
-        // 不再自动跳转，让用户自己决定
-        if (phaseRef.current === "timeout") return;
-
-        sessionStorage.setItem("reportData", JSON.stringify(report));
+        // 无论是否超时，只要 consumeAll 返回了报告就写入并跳转
+        // （用户可能还在看 timeout UI，自动帮他跳过去）
+        try {
+          sessionStorage.setItem("reportData", JSON.stringify(report));
+        } catch {
+          // sessionStorage 配额满：仍继续跳转，report 页会走 bg-runner 内存路径
+        }
         // finalize 落库（失败不阻塞跳转）
         fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/finalize`, {
           method: "POST",

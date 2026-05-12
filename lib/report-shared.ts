@@ -120,8 +120,23 @@ export function tryFixAndParse(jsonStr: string): unknown {
     return JSON.parse(jsonStr);
   } catch {
     let fixed = jsonStr;
+    // Strip control characters (except \n \r \t) that break JSON strings
+    fixed = fixed.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
+    // Remove trailing commas before ] or }
+    fixed = fixed.replace(/,\s*([}\]])/g, "$1");
+    // Insert missing commas between adjacent elements: }" or ]" or ""{
+    fixed = fixed.replace(/}(\s*")/g, "},$1");
+    fixed = fixed.replace(/](\s*")/g, "],$1");
+    fixed = fixed.replace(/"(\s*\{)/g, '",$1');
+    fixed = fixed.replace(/"(\s*\[)/g, '",$1');
+    // Fix missing commas between string/number values: "value"\n"key" or number\n"key"
+    fixed = fixed.replace(/"(\s*\n\s*"(?:[^"]*":))/g, '",$1');
+    fixed = fixed.replace(/(\d)(\s*\n\s*")/g, "$1,$2");
+    try { return JSON.parse(fixed); } catch { /* continue */ }
+    // Close unclosed quotes
     const quoteCount = (fixed.match(/(?<!\\)"/g) || []).length;
     if (quoteCount % 2 !== 0) fixed += '"';
+    // Close unclosed brackets/braces
     const opens = (fixed.match(/[{[]/g) || []).length;
     const closes = (fixed.match(/[}\]]/g) || []).length;
     for (let i = 0; i < opens - closes; i++) {

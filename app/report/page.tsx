@@ -162,13 +162,18 @@ export default function ReportPage() {
       }
     }
 
-    // 3. 消费 bg-runner 的 5 个 promise
+    // 3. 消费 bg-runner 的 5 个 promise（null = 从未启动，空 Map = 刷新丢失）
+    //    两种 miss 都用 mock 兜底渲染，不再 redirect /loading 避免无限循环
     const bgPromises = consumeBgSections(formData, quizAnswers);
-    if (!bgPromises) {
-      // 内存 promise 全 miss + sessionStorage 也无标记 → 从未启动
-      // 让 loading 页负责重发请求 + 装配
-      console.warn("[report-page] consumeBgSections returned null, redirect /loading");
-      router.replace("/loading");
+    if (!bgPromises || bgPromises.size === 0) {
+      console.warn("[report-page] bg miss, rendering with mock data");
+      setSections({
+        overview: { data: MOCK_OVERVIEW, status: "mock" },
+        strength: { data: MOCK_STRENGTH, status: "mock" },
+        positioning: { data: MOCK_POSITIONING, status: "mock" },
+        resumeDiagnosis: { data: hasResume ? MOCK_RESUME_DIAGNOSIS : null, status: hasResume ? "mock" : "done" },
+        advice: { data: MOCK_ADVICE, status: "mock" },
+      });
       return;
     }
 
