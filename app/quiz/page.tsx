@@ -236,7 +236,7 @@ export default function QuizPage() {
       try {
         window.sessionStorage.setItem("quizRedirectReason", "请先填写岗位与背景信息");
       } catch {}
-      router.replace("/form");
+      router.replace("/");
       return;
     }
     setFormData(fd);
@@ -365,7 +365,7 @@ export default function QuizPage() {
           <div className="text-lg font-medium text-[var(--navy-900)]">测评加载失败</div>
           <div className="text-sm text-muted-foreground break-words">{loadError}</div>
           <div className="flex justify-center gap-3">
-            <Button variant="outline" onClick={() => router.push("/form")}>
+            <Button variant="outline" onClick={() => router.push("/")}>
               返回填写信息
             </Button>
             <Button

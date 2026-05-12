@@ -7,7 +7,7 @@ export interface FormData {
   targetPosition?: string;
   /** 学历，使用 EDUCATION_OPTIONS value：junior_high / high_school / junior_college / bachelor / master_plus */
   education: string;
-  /** 工作年限，使用 WORK_YEARS_OPTIONS value：none / lt1 / 1to3 / 3to5 / 5to10 / gt10 */
+  /** 工作年限，使用 WORK_YEARS_OPTIONS value：lt1 / 1to3 / 3to10 / gt10 */
   workYears: string;
   /** 可选：上传简历的文件名（fixture，E2E_MOCK_MODE 下跳过真实解析） */
   resumeFileName?: string;
@@ -29,11 +29,9 @@ const EDUCATION_LABELS: Record<string, string> = {
 };
 
 const WORK_YEARS_LABELS: Record<string, string> = {
-  none: "无工作经验",
-  lt1: "1 年以内",
-  "1to3": "1-3 年",
-  "3to5": "3-5 年",
-  "5to10": "5-10 年",
+  lt1: "一年以下",
+  "1to3": "1~3 年",
+  "3to10": "3~10 年",
   gt10: "10 年以上",
 };
 
@@ -41,7 +39,7 @@ export class FormPage {
   constructor(private page: Page) {}
 
   async goto() {
-    await this.page.goto("/form");
+    await this.page.goto("/");
   }
 
   /**

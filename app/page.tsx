@@ -1,745 +1,477 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
-import { motion, useInView, useMotionValue, useSpring } from "framer-motion";
-import Link from "next/link";
-import {
-  ClipboardList,
-  MessageCircle,
-  FileBarChart,
-  ArrowRight,
-  Sparkles,
-  Shield,
-  Zap,
-  Brain,
-  BarChart3,
-  Target,
-  TrendingUp,
-  Award,
-  Building2,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { FileUpload, type FileUploadValue } from "@/components/ui/file-upload";
+import { StepIndicator } from "@/components/ui/step-indicator";
+import {
+  USER_IDENTITY_OPTIONS,
+  EDUCATION_OPTIONS,
+  WORK_YEARS_OPTIONS,
+} from "@/lib/form-options";
+import { startReportPrefetch, clearReportPrefetch } from "@/lib/report-prefetch";
+import { clearBgSections } from "@/lib/report-bg-runner";
+import { startQuizPrefetch, clearQuizPrefetch } from "@/lib/quiz-prefetch";
+import type { JobFormData, UserIdentity } from "@/lib/types";
 
-/* ─── Animation helpers ─── */
+const formSchema = z.object({
+  identity: z.enum(["recent_grad", "young_unemployed", "general_unemployed"], {
+    error: "请选择当前身份",
+  }),
+  targetPosition: z.string().max(60, "岗位名称过长").optional(),
+  education: z.string().min(1, "请选择最高学历"),
+  workYears: z.string().min(1, "请选择工作年限"),
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
 const cubicEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.1, duration: 0.7, ease: cubicEase },
-  }),
-};
-
-const scaleReveal = {
-  hidden: { opacity: 0, scale: 0.88, y: 20 },
-  visible: (i: number) => ({
-    opacity: 1,
-    scale: 1,
-    y: 0,
-    transition: { delay: 0.4 + i * 0.12, duration: 0.6, ease: cubicEase },
-  }),
-};
-
-/* ─── Animated counter component ─── */
-function AnimatedCounter({
-  target,
-  suffix = "",
-  prefix = "",
-  duration = 2,
-}: {
-  target: number;
-  suffix?: string;
-  prefix?: string;
-  duration?: number;
-}) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const isInView = useInView(ref, { once: true, margin: "-60px" });
-  const motionVal = useMotionValue(0);
-  const spring = useSpring(motionVal, { duration: duration * 1000, bounce: 0 });
-
-  useEffect(() => {
-    if (isInView) motionVal.set(target);
-  }, [isInView, motionVal, target]);
-
-  useEffect(() => {
-    const unsubscribe = spring.on("change", (v) => {
-      if (ref.current) {
-        ref.current.textContent =
-          prefix + Math.round(v).toLocaleString() + suffix;
-      }
-    });
-    return unsubscribe;
-  }, [spring, suffix, prefix]);
-
-  return <span ref={ref}>{prefix}0{suffix}</span>;
-}
-
-/* ─── Spotlight card with cursor tracking ─── */
-function SpotlightCard({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const rect = cardRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    cardRef.current?.style.setProperty("--spotlight-x", `${x}%`);
-    cardRef.current?.style.setProperty("--spotlight-y", `${y}%`);
+function getSavedDefaults(): Partial<FormValues> & {
+  resume: FileUploadValue | null;
+} {
+  const empty = {
+    identity: undefined,
+    targetPosition: "",
+    education: "",
+    workYears: "",
+    resume: null,
   };
-  return (
-    <div
-      ref={cardRef}
-      onMouseMove={handleMouseMove}
-      className={`spotlight-card ${className}`}
-    >
-      {children}
-    </div>
-  );
+  if (typeof window === "undefined") return empty;
+  try {
+    const saved = sessionStorage.getItem("formData");
+    if (!saved) return empty;
+    const parsed = JSON.parse(saved) as Partial<JobFormData>;
+    return {
+      identity: parsed.identity,
+      targetPosition: parsed.targetPosition ?? "",
+      education: parsed.education ?? "",
+      workYears: parsed.workYears ?? "",
+      resume:
+        parsed.resumeText && parsed.resumeFileName
+          ? { fileName: parsed.resumeFileName, text: parsed.resumeText }
+          : null,
+    };
+  } catch {
+    return empty;
+  }
 }
 
-/* ─── Data ─── */
-const steps = [
-  {
-    icon: ClipboardList,
-    step: "01",
-    title: "填写求职意向",
-    desc: "填写意向岗位、学历、公司、城市 4 项；可选上传 PDF/Word 简历作为分析加成",
-    accent: "from-blue-500 to-cyan-400",
-    delay: 0,
-  },
-  {
-    icon: MessageCircle,
-    step: "02",
-    title: "6 题 AI 快测",
-    desc: "AI 语音朗读题目，覆盖 MBTI 四维度 + 风险偏好 + 价值取向，1-2 分钟完成",
-    accent: "from-indigo-500 to-blue-400",
-    delay: 1,
-  },
-  {
-    icon: FileBarChart,
-    step: "03",
-    title: "生成 7 章节定位报告",
-    desc: "总览 · 岗位薪资 · 岗位信息 · 简历诊断 · 谈薪要点 · 发展建议 · 职场环境透视",
-    accent: "from-violet-500 to-indigo-400",
-    delay: 2,
-  },
-];
-
-const stats = [
-  { value: 10000, suffix: "+", label: "已服务咨询", icon: Target },
-  { value: 27, suffix: "个", label: "覆盖行业", icon: Building2 },
-  { value: 95, suffix: "%+", label: "报告满意度", icon: TrendingUp },
-  { value: 3, suffix: "min", label: "平均生成时间", icon: Zap },
-];
-
-const features = [
-  {
-    icon: Brain,
-    title: "深度 AI 分析引擎",
-    desc: "基于大语言模型的多维度职业画像分析，覆盖岗位职责、能力评估、发展路径",
-  },
-  {
-    icon: BarChart3,
-    title: "可视化数据报告",
-    desc: "雷达图、环形图、时间线等多种图表，让复杂数据一目了然",
-  },
-  {
-    icon: Shield,
-    title: "专业权威可信赖",
-    desc: "结构化报告输出，每项分析有据可依，支持职业咨询辅助决策",
-  },
-  {
-    icon: Sparkles,
-    title: "个性化智能建议",
-    desc: "基于访谈内容生成针对性发展建议，而非千人一面的模板报告",
-  },
-];
-
-/* ─── Hero SVG visualization ─── */
-function HeroVisualization() {
-  const radarPoints = [
-    { label: "领导力", x: 200, y: 60, score: 0.85 },
-    { label: "专业", x: 330, y: 140, score: 0.92 },
-    { label: "沟通", x: 300, y: 290, score: 0.78 },
-    { label: "创新", x: 100, y: 290, score: 0.7 },
-    { label: "执行", x: 70, y: 140, score: 0.88 },
-  ];
-  const cx = 200,
-    cy = 185,
-    maxR = 100;
-  const getXY = (i: number, r: number) => {
-    const angle = (Math.PI * 2 * i) / radarPoints.length - Math.PI / 2;
-    return { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
-  };
-  const polygonPoints = radarPoints
-    .map((p, i) => {
-      const pt = getXY(i, maxR * p.score);
-      return `${pt.x},${pt.y}`;
-    })
-    .join(" ");
-
-  return (
-    <svg
-      viewBox="0 0 400 360"
-      className="w-full max-w-md mx-auto"
-      style={{ filter: "drop-shadow(0 0 40px oklch(0.55 0.18 250 / 0.15))" }}
-    >
-      {/* Radar grid rings */}
-      {[0.33, 0.66, 1].map((r) => (
-        <polygon
-          key={r}
-          points={Array.from({ length: 5 }, (_, i) => {
-            const pt = getXY(i, maxR * r);
-            return `${pt.x},${pt.y}`;
-          }).join(" ")}
-          fill="none"
-          stroke="rgba(255,255,255,0.08)"
-          strokeWidth="1"
-        />
-      ))}
-      {/* Axis lines */}
-      {radarPoints.map((_, i) => {
-        const pt = getXY(i, maxR);
-        return (
-          <line
-            key={i}
-            x1={cx}
-            y1={cy}
-            x2={pt.x}
-            y2={pt.y}
-            stroke="rgba(255,255,255,0.06)"
-            strokeWidth="1"
-          />
-        );
-      })}
-      {/* Radar sweep */}
-      <defs>
-        <linearGradient id="sweep-grad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="transparent" />
-          <stop offset="100%" stopColor="oklch(0.65 0.16 245 / 0.3)" />
-        </linearGradient>
-      </defs>
-      <g className="radar-sweep" style={{ transformOrigin: `${cx}px ${cy}px` }}>
-        <line
-          x1={cx}
-          y1={cy}
-          x2={cx + maxR}
-          y2={cy}
-          stroke="url(#sweep-grad)"
-          strokeWidth="2"
-        />
-        <path
-          d={`M ${cx} ${cy} L ${cx + maxR} ${cy} A ${maxR} ${maxR} 0 0 1 ${cx + maxR * Math.cos(Math.PI / 6)} ${cy + maxR * Math.sin(Math.PI / 6)} Z`}
-          fill="oklch(0.65 0.16 245 / 0.04)"
-        />
-      </g>
-      {/* Data polygon */}
-      <motion.polygon
-        initial={{ opacity: 0, scale: 0.5 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.8, duration: 1.2, ease: cubicEase }}
-        style={{ transformOrigin: `${cx}px ${cy}px` }}
-        points={polygonPoints}
-        fill="oklch(0.55 0.18 250 / 0.15)"
-        stroke="oklch(0.65 0.16 245 / 0.7)"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      {/* Data points with glow */}
-      {radarPoints.map((p, i) => {
-        const pt = getXY(i, maxR * p.score);
-        return (
-          <g key={i}>
-            <motion.circle
-              initial={{ opacity: 0, r: 0 }}
-              animate={{ opacity: 0.3, r: 8 }}
-              transition={{ delay: 1.2 + i * 0.1, duration: 0.5 }}
-              cx={pt.x}
-              cy={pt.y}
-              fill="oklch(0.65 0.16 245)"
-              className="pulse-dot"
-              style={{ animationDelay: `${i * 0.6}s` }}
-            />
-            <motion.circle
-              initial={{ opacity: 0, r: 0 }}
-              animate={{ opacity: 1, r: 4 }}
-              transition={{ delay: 1.2 + i * 0.1, duration: 0.4 }}
-              cx={pt.x}
-              cy={pt.y}
-              fill="white"
-              stroke="oklch(0.65 0.16 245)"
-              strokeWidth="2"
-            />
-            <motion.text
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.7 }}
-              transition={{ delay: 1.5 + i * 0.1 }}
-              x={p.x}
-              y={p.y}
-              textAnchor="middle"
-              fill="white"
-              fontSize="11"
-              fontWeight="500"
-            >
-              {p.label}
-            </motion.text>
-          </g>
-        );
-      })}
-      {/* Center dot */}
-      <circle cx={cx} cy={cy} r="3" fill="oklch(0.65 0.16 245 / 0.6)" />
-    </svg>
-  );
-}
-
-/* ─── Constellation background particles ─── */
-function ConstellationBG() {
-  const particles = [
-    { x: 10, y: 20, size: 2, delay: 0 },
-    { x: 85, y: 15, size: 1.5, delay: 1 },
-    { x: 25, y: 70, size: 1, delay: 2 },
-    { x: 70, y: 65, size: 2, delay: 0.5 },
-    { x: 50, y: 35, size: 1.5, delay: 1.5 },
-    { x: 90, y: 80, size: 1, delay: 3 },
-    { x: 15, y: 45, size: 1, delay: 2.5 },
-    { x: 60, y: 85, size: 1.5, delay: 1 },
-    { x: 40, y: 10, size: 1, delay: 0.8 },
-    { x: 78, y: 40, size: 2, delay: 1.2 },
-  ];
-  const lines = [
-    [0, 4],
-    [4, 1],
-    [4, 3],
-    [2, 6],
-    [3, 7],
-    [1, 9],
-    [8, 0],
-  ];
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <svg className="absolute inset-0 w-full h-full">
-        {lines.map(([a, b], i) => (
-          <line
-            key={i}
-            x1={`${particles[a].x}%`}
-            y1={`${particles[a].y}%`}
-            x2={`${particles[b].x}%`}
-            y2={`${particles[b].y}%`}
-            stroke="rgba(255,255,255,0.06)"
-            strokeWidth="1"
-            className="constellation-line"
-            style={{ animationDelay: `${i * 0.7}s` }}
-          />
-        ))}
-      </svg>
-      {particles.map((p, i) => (
-        <div
-          key={i}
-          className="absolute rounded-full bg-white pulse-dot"
-          style={{
-            left: `${p.x}%`,
-            top: `${p.y}%`,
-            width: p.size * 2,
-            height: p.size * 2,
-            animationDelay: `${p.delay}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════
-   MAIN PAGE
-   ═══════════════════════════════════════════ */
 export default function HomePage() {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const saved = getSavedDefaults();
+  const [resume, setResume] = useState<FileUploadValue | null>(saved.resume);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      identity: saved.identity,
+      targetPosition: saved.targetPosition ?? "",
+      education: saved.education ?? "",
+      workYears: saved.workYears ?? "",
+    },
+  });
+
+  const watchedValues = watch();
+
+  const selectedIdentity = watchedValues.identity;
+
+  const onSubmit = (data: FormValues) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    const payload: JobFormData = {
+      identity: data.identity as UserIdentity,
+      targetPosition: data.targetPosition ?? "",
+      education: data.education,
+      workYears: data.workYears,
+      resumeText: resume?.text,
+      resumeFileName: resume?.fileName,
+    };
+    sessionStorage.setItem("formData", JSON.stringify(payload));
+    // 用户从入口重新填表，清掉所有下游缓存：
+    // 量表答案 / 报告数据 / 访谈 Q3Q4 锁定 / 简历 ref / 简历文件名
+    sessionStorage.removeItem("quizAnswers");
+    sessionStorage.removeItem("reportData");
+    sessionStorage.removeItem("q3q4Lock");
+    if (resume?.resumeRef) sessionStorage.setItem("resumeRef", resume.resumeRef);
+    else sessionStorage.removeItem("resumeRef");
+    if (resume?.resumeFilename) sessionStorage.setItem("resumeFilename", resume.resumeFilename);
+    else sessionStorage.removeItem("resumeFilename");
+    // career-nav 里 5 模块全部依赖 quiz/Q1Q2，本阶段无可预拉项；保留 stub 调用
+    // 仅为对齐项目里历史 import 习惯。
+    startReportPrefetch(payload);
+    // 🚀 Layer 3 优化：在页面跳转前立即触发 LLM 生成，
+    // quiz page mount 时可直接消费已在途的 Promise，节省 ~2-3s 页面过渡时间
+    startQuizPrefetch(payload);
+    router.push("/quiz");
+  };
+
+  useEffect(() => {
+    // 用户返回入口重新填写：清理旧的预拉取，防止提交新表单后拿到旧数据
+    clearReportPrefetch();
+    clearQuizPrefetch(); // 清掉上次的 quiz 预触发（用户重填时身份/学历可能变）
+    clearBgSections(); // 用户回入口重填时清掉 quiz 阶段启动的后台任务
+    // 后台预编译 /quiz 路由（dev 模式消除首次跳转的"Compiling..."等待）
+    router.prefetch("/quiz");
+  }, [router]);
+
   return (
-    <div className="flex flex-col min-h-screen overflow-x-hidden bg-[var(--background)]">
-      {/* ═══ HERO ═══ */}
-      <section className="relative min-h-[90vh] flex items-center overflow-hidden">
-        {/* Layered background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[var(--navy-950)] via-[var(--navy-900)] to-[var(--navy-800)]" />
-        <div className="absolute inset-0 aurora-bg" />
-        <div className="absolute inset-0 hero-grid" />
-        <div className="absolute inset-0 noise-overlay" />
-        <ConstellationBG />
+    <div className="min-h-screen relative overflow-hidden">
+      <div className="fixed inset-0 bg-gradient-to-br from-[var(--blue-50)] via-white to-[var(--blue-100)]" />
+      <div className="fixed inset-0 hero-grid opacity-40" />
 
-        {/* Large decorative orbs */}
-        <div className="absolute top-[-20%] right-[-10%] w-[700px] h-[700px] rounded-full bg-[var(--blue-500)] opacity-[0.06] blur-[150px]" />
-        <div className="absolute bottom-[-30%] left-[-15%] w-[600px] h-[600px] rounded-full bg-[var(--blue-300)] opacity-[0.04] blur-[130px]" />
-        <div className="absolute top-[40%] left-[50%] w-[400px] h-[400px] rounded-full bg-violet-500 opacity-[0.03] blur-[120px]" />
+      <div className="fixed top-20 -right-32 w-96 h-96 rounded-full bg-gradient-to-br from-[var(--blue-200)] to-[var(--blue-100)] opacity-40 blur-3xl" />
+      <div className="fixed -bottom-20 -left-32 w-80 h-80 rounded-full bg-gradient-to-tr from-[var(--blue-300)] to-[var(--blue-100)] opacity-30 blur-3xl" />
 
-        {/* Subtle vertical accent lines */}
-        {[20, 40, 60, 80].map((pos) => (
-          <div
-            key={pos}
-            className="absolute top-0 w-px h-full bg-gradient-to-b from-transparent via-white/[0.03] to-transparent"
-            style={{ left: `${pos}%` }}
-          />
-        ))}
-
-        <div className="relative z-10 w-full max-w-6xl mx-auto px-6 py-20">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            {/* Left: Text content */}
-            <div className="text-center lg:text-left">
-              <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={0}>
-                <Badge
-                  variant="outline"
-                  className="mb-6 border-white/15 bg-white/[0.05] text-white/70 backdrop-blur-md px-4 py-1.5 text-xs tracking-[0.15em] font-light"
-                >
-                  <span className="size-1.5 rounded-full bg-emerald-400 mr-2 inline-block animate-pulse" />
-                  智能职业定位分析系统
-                </Badge>
-              </motion.div>
-
-              <motion.h1
-                variants={fadeUp}
-                initial="hidden"
-                animate="visible"
-                custom={1}
-                className="text-5xl sm:text-6xl lg:text-[4.5rem] font-extrabold tracking-tight leading-[1.05] text-gradient-hero"
-              >
-                谨世 ATA
-                <br />
-                职业导航报告
-              </motion.h1>
-
-              <motion.div
-                variants={fadeUp}
-                initial="hidden"
-                animate="visible"
-                custom={2}
-                className="mt-6 flex items-center gap-3 justify-center lg:justify-start"
-              >
-                <div className="h-px w-16 bg-gradient-to-r from-[var(--blue-400)] to-transparent" />
-                <span className="text-xs text-blue-300/50 tracking-[0.2em] font-light uppercase">
-                  Career Positioning
-                </span>
-              </motion.div>
-
-              <motion.p
-                variants={fadeUp}
-                initial="hidden"
-                animate="visible"
-                custom={3}
-                className="mt-6 text-lg text-blue-100/60 max-w-lg leading-relaxed font-light mx-auto lg:mx-0"
-              >
-                面向应届大学生的职业定位工具：填写求职意向 + 上传简历（选填），1-2 分钟完成 AI 语音快测，获得含薪资、谈薪、发展建议的 7 章节报告
-              </motion.p>
-
-              <motion.div
-                variants={fadeUp}
-                initial="hidden"
-                animate="visible"
-                custom={4}
-                className="mt-10 flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start"
-              >
-                <Link href="/form" className="w-full sm:w-auto">
-                  <Button
-                    size="lg"
-                    className="animate-cta-pulse w-full sm:w-auto h-16 px-12 text-lg font-bold bg-[var(--blue-500)] text-white hover:bg-[var(--blue-600)] border-0 rounded-2xl ring-2 ring-white/20 hover:ring-white/40 shadow-2xl shadow-blue-500/40 transition-all duration-300 cursor-pointer"
-                  >
-                    开始职业分析
-                    <ArrowRight className="ml-2 size-6 transition-transform group-hover/button:translate-x-1" />
-                  </Button>
-                </Link>
-                <span className="text-xs text-blue-200/30 font-light">
-                  无需注册 &middot; 即刻体验
-                </span>
-              </motion.div>
-
-              {/* Inline trust indicators */}
-              <motion.div
-                variants={fadeUp}
-                initial="hidden"
-                animate="visible"
-                custom={5}
-                className="mt-10 flex items-center gap-5 justify-center lg:justify-start"
-              >
-                {["AI 实时分析", "结构化报告", "数据可视化"].map((t) => (
-                  <span
-                    key={t}
-                    className="flex items-center gap-1.5 text-xs text-blue-200/40 font-light"
-                  >
-                    <span className="size-1 rounded-full bg-emerald-400/50" />
-                    {t}
-                  </span>
-                ))}
-              </motion.div>
-            </div>
-
-            {/* Right: Radar visualization */}
-            <motion.div
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5, duration: 0.8, ease: cubicEase }}
-              className="hidden lg:block"
-            >
-              <HeroVisualization />
-            </motion.div>
-          </div>
-        </div>
-
-        {/* Bottom gradient fade */}
-        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[var(--background)] to-transparent" />
-      </section>
-
-      {/* ═══ PROCESS STEPS ═══ */}
-      <section className="relative -mt-16 z-20 max-w-5xl mx-auto w-full px-6">
-        {/* Connecting line behind cards */}
-        <div className="hidden md:block absolute top-1/2 left-[15%] right-[15%] h-px">
-          <svg className="w-full h-4 -mt-2" preserveAspectRatio="none">
-            <line
-              x1="0"
-              y1="8"
-              x2="100%"
-              y2="8"
-              stroke="var(--blue-200)"
-              strokeWidth="2"
-              className="dash-animated"
-              strokeOpacity="0.4"
-            />
-          </svg>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-          {steps.map((step, i) => (
-            <motion.div
-              key={step.step}
-              variants={scaleReveal}
-              initial="hidden"
-              animate="visible"
-              custom={i}
-            >
-              <SpotlightCard className="h-full">
-                <div className="glass-card gradient-border-card rounded-2xl p-7 h-full relative transition-all duration-500">
-                  {/* Step number */}
-                  <div className="flex items-center justify-between mb-5">
-                    <div
-                      className={`flex items-center justify-center size-12 rounded-2xl bg-gradient-to-br ${step.accent} text-white shadow-lg shadow-blue-500/20`}
-                    >
-                      <step.icon
-                        className="size-5 animate-float"
-                        style={{ animationDelay: `${step.delay}s` }}
-                        strokeWidth={1.8}
-                      />
-                    </div>
-                    <span className="text-3xl font-black text-[var(--blue-100)] font-mono tracking-tight">
-                      {step.step}
-                    </span>
-                  </div>
-
-                  <h3 className="text-xl font-bold text-[var(--foreground)] mb-2 tracking-tight">
-                    {step.title}
-                  </h3>
-                  <p className="text-sm text-[var(--muted-foreground)] leading-relaxed">
-                    {step.desc}
-                  </p>
-                </div>
-              </SpotlightCard>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* ═══ STATS BAR ═══ */}
-      <section className="max-w-5xl mx-auto w-full px-6 py-20">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {stats.map((stat, i) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ delay: i * 0.08, duration: 0.5 }}
-              className="text-center py-6"
-            >
-              <div className="inline-flex items-center justify-center size-10 rounded-xl bg-[var(--blue-50)] text-[var(--blue-500)] mb-3">
-                <stat.icon className="size-5" strokeWidth={1.8} />
-              </div>
-              <div className="text-3xl font-extrabold text-[var(--foreground)] tracking-tight stat-underline inline-block">
-                <AnimatedCounter
-                  target={stat.value}
-                  suffix={stat.suffix}
-                  duration={1.8}
-                />
-              </div>
-              <div className="mt-2 text-xs text-[var(--muted-foreground)] tracking-wide">
-                {stat.label}
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* ═══ FEATURES ═══ */}
-      <section className="relative py-24 overflow-hidden">
-        {/* Subtle background accent */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[var(--blue-50)] to-transparent opacity-50" />
-
-        <div className="relative max-w-5xl mx-auto px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
-            <Badge variant="secondary" className="mb-4 text-xs tracking-wider">
-              核心能力
-            </Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold text-[var(--foreground)] tracking-tight">
-              为什么选择谨世 ATA 职业导航报告
-            </h2>
-            <p className="mt-4 text-base text-[var(--muted-foreground)] max-w-xl mx-auto">
-              将职业咨询从经验判断升级为数据驱动的专业分析
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {features.map((feat, i) => (
-              <motion.div
-                key={feat.title}
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-60px" }}
-                transition={{ delay: i * 0.08, duration: 0.5 }}
-              >
-                <SpotlightCard>
-                  <div className="gradient-border-card rounded-2xl p-6 h-full flex gap-5 items-start transition-all duration-500 hover:shadow-lg hover:shadow-blue-100/50">
-                    <div className="flex-shrink-0 flex items-center justify-center size-12 rounded-2xl bg-gradient-to-br from-[var(--blue-500)] to-[var(--blue-400)] text-white shadow-md shadow-blue-500/15">
-                      <feat.icon className="size-5" strokeWidth={1.8} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-semibold text-[var(--foreground)] mb-1.5">
-                        {feat.title}
-                      </h3>
-                      <p className="text-sm text-[var(--muted-foreground)] leading-relaxed">
-                        {feat.desc}
-                      </p>
-                    </div>
-                  </div>
-                </SpotlightCard>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ TRUST / SOCIAL PROOF ═══ */}
-      <section className="max-w-5xl mx-auto w-full px-6 pb-20">
+      <div className="relative z-10 max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12 pb-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="relative rounded-3xl overflow-hidden"
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: cubicEase }}
+          className="mb-8 sm:mb-10"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-[var(--navy-950)] via-[var(--navy-900)] to-[var(--navy-800)]" />
-          <div className="absolute inset-0 noise-overlay" />
-          <div className="absolute inset-0 hero-grid opacity-50" />
+          <h1 className="text-2xl sm:text-3xl font-bold text-[var(--blue-600)] mb-3 tracking-tight">
+            就业服务-智能职业导航
+          </h1>
 
-          <div className="relative z-10 px-8 sm:px-12 py-14 text-center">
-            <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
-              {[
-                { icon: Shield, text: "数据安全保障" },
-                { icon: Award, text: "AI 技术驱动" },
-                { icon: Building2, text: "政务级服务标准" },
-              ].map((badge) => (
-                <div
-                  key={badge.text}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-sm"
-                >
-                  <badge.icon className="size-3.5 text-blue-300/70" />
-                  <span className="text-xs text-blue-100/60 font-light tracking-wide">
-                    {badge.text}
-                  </span>
-                </div>
-              ))}
-            </div>
+          <StepIndicator currentStep={0} compact className="mb-6" />
 
-            <h3 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-4">
-              让应届求职准备不再迷茫
-            </h3>
-            <p className="text-sm text-blue-200/50 max-w-lg mx-auto mb-8 leading-relaxed">
-              面向应届大学生的职业导航工具：AI 结合你的意向岗位、性格测评和简历，生成一份可执行、有数据的职业导航报告
-            </p>
-
-            <Link href="/form">
-              <Button
-                size="lg"
-                className="btn-glow h-12 px-8 text-sm font-medium bg-white text-[var(--navy-900)] hover:bg-blue-50 border-0 rounded-xl cursor-pointer"
-              >
-                立即开始分析
-                <ArrowRight className="ml-2 size-4" />
-              </Button>
-            </Link>
-          </div>
+          <p className="text-sm sm:text-base text-[var(--muted-foreground)] leading-relaxed">
+            花 5-8 分钟，得到一份属于你的职业方向参考。
+          </p>
         </motion.div>
-      </section>
 
-      {/* ═══ FOOTER ═══ */}
-      <footer className="relative">
-        <div className="h-px bg-gradient-to-r from-transparent via-[var(--blue-200)] to-transparent" />
-        <div className="max-w-5xl mx-auto w-full px-6 py-10">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="size-8 rounded-lg bg-gradient-to-br from-[var(--blue-500)] to-[var(--navy-700)] flex items-center justify-center">
-                <FileBarChart className="size-4 text-white" />
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-4 sm:space-y-5"
+        >
+          {/* 1. 身份选择 —— 双卡片 */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1, ease: cubicEase }}
+          >
+            <div className="glass-card rounded-xl p-4 sm:p-5">
+              <Label className="flex items-center gap-2 text-sm font-medium text-[var(--navy-800)] mb-3">
+                <span className="text-[var(--blue-500)]">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <circle cx="10" cy="7" r="3.2" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M3.5 17c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </span>
+                你的当前身份
+                <span className="text-red-400 text-xs">*</span>
+              </Label>
+
+              <div className="grid grid-cols-1 gap-3">
+                {USER_IDENTITY_OPTIONS.map((opt) => {
+                  const active = selectedIdentity === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() =>
+                        setValue("identity", opt.value, { shouldValidate: true })
+                      }
+                      aria-pressed={active}
+                      className={[
+                        "relative text-left rounded-xl border p-4 transition-all min-h-[5.5rem]",
+                        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blue-500)]/40",
+                        active
+                          ? "border-[var(--blue-500)] bg-[var(--blue-50)] shadow-sm ring-1 ring-[var(--blue-500)]/20"
+                          : "border-[var(--blue-200)] bg-white/60 hover:border-[var(--blue-300)] hover:bg-white/80",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-base font-semibold text-[var(--navy-900)]">
+                          {opt.label}
+                        </div>
+                        <span
+                          className={[
+                            "shrink-0 size-5 rounded-full border-2 flex items-center justify-center transition-colors",
+                            active
+                              ? "border-[var(--blue-500)] bg-[var(--blue-500)]"
+                              : "border-[var(--blue-300)] bg-white",
+                          ].join(" ")}
+                          aria-hidden
+                        >
+                          {active && (
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                              <path d="M2 5l2 2 4-4" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-xs sm:text-sm text-[var(--muted-foreground)] leading-relaxed">
+                        {opt.description}
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
-              <span className="text-sm font-semibold text-[var(--foreground)]">
-                谨世 ATA 职业导航报告
-              </span>
-            </div>
-            <span className="text-xs text-[var(--muted-foreground)]">
-              &copy; {new Date().getFullYear()} 智能职业定位分析系统
-              &middot; 专业咨询辅助工具
-            </span>
-          </div>
-        </div>
-      </footer>
-      <MobileStickyCTA />
-    </div>
-  );
-}
+              {/* 隐藏 input 让 RHF 注册 identity 字段 */}
+              <input type="hidden" {...register("identity")} />
 
-function MobileStickyCTA() {
-  const [hidden, setHidden] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 800);
-    const footer = document.querySelector("footer");
-    if (!footer) return () => clearTimeout(t);
-    const io = new IntersectionObserver(
-      ([e]) => setHidden(e.isIntersecting),
-      { threshold: 0.1 }
-    );
-    io.observe(footer);
-    return () => {
-      clearTimeout(t);
-      io.disconnect();
-    };
-  }, []);
-  return (
-    <motion.div
-      initial={{ y: 100, opacity: 0 }}
-      animate={{ y: mounted && !hidden ? 0 : 100, opacity: mounted && !hidden ? 1 : 0 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 bg-gradient-to-t from-white via-white/95 to-transparent backdrop-blur-md"
-    >
-      <Link href="/form" className="block">
-        <Button className="w-full h-14 text-base font-bold bg-[var(--blue-500)] text-white hover:bg-[var(--blue-600)] rounded-2xl shadow-2xl shadow-blue-500/40">
-          开始职业分析 <ArrowRight className="ml-2 size-5" />
-        </Button>
-      </Link>
-    </motion.div>
+              {errors.identity && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xs text-red-500 mt-2 flex items-center gap-1"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M6 4v2.5M6 8h.005" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  {errors.identity.message}
+                </motion.p>
+              )}
+            </div>
+          </motion.div>
+
+          {/* 2. 目标岗位 —— 自由文本 */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.18, ease: cubicEase }}
+          >
+            <div className="glass-card rounded-xl p-4 sm:p-5">
+              <Label
+                htmlFor="targetPosition"
+                className="flex items-center gap-2 text-sm font-medium text-[var(--navy-800)] mb-3"
+              >
+                <span className="text-[var(--blue-500)]">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <rect x="3" y="3" width="14" height="14" rx="3" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M7 7h6M7 10h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </span>
+                目标岗位（选填）
+              </Label>
+              <Input
+                id="targetPosition"
+                placeholder="例如：产品经理、前端工程师、行政专员"
+                {...register("targetPosition")}
+                className="h-11 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all placeholder:text-[var(--muted-foreground)]/50"
+              />
+              {errors.targetPosition && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xs text-red-500 mt-2 flex items-center gap-1"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M6 4v2.5M6 8h.005" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  {errors.targetPosition.message}
+                </motion.p>
+              )}
+            </div>
+          </motion.div>
+
+          {/* 3. 最高学历 —— 下拉 */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.26, ease: cubicEase }}
+          >
+            <div className="glass-card rounded-xl p-4 sm:p-5">
+              <Label
+                htmlFor="education"
+                className="flex items-center gap-2 text-sm font-medium text-[var(--navy-800)] mb-3"
+              >
+                <span className="text-[var(--blue-500)]">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M10 3L1.5 7 10 11l8.5-4L10 3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                    <path d="M5 9v4c0 1.66 2.24 3 5 3s5-1.34 5-3V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                最高学历
+                <span className="text-red-400 text-xs">*</span>
+              </Label>
+              <Select
+                value={watchedValues.education}
+                onValueChange={(val) =>
+                  setValue("education", val ?? "", { shouldValidate: true })
+                }
+              >
+                <SelectTrigger
+                  id="education"
+                  className="w-full h-11 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all data-[placeholder]:text-[var(--muted-foreground)]/50"
+                >
+                  <SelectValue placeholder="选择最高学历">
+                    {watchedValues.education
+                      ? (EDUCATION_OPTIONS.find((o) => o.value === watchedValues.education)?.label ?? "选择最高学历")
+                      : "选择最高学历"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {EDUCATION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.education && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xs text-red-500 mt-2 flex items-center gap-1"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M6 4v2.5M6 8h.005" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  {errors.education.message}
+                </motion.p>
+              )}
+            </div>
+          </motion.div>
+
+          {/* 4. 工作年限 —— 下拉 */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.34, ease: cubicEase }}
+          >
+            <div className="glass-card rounded-xl p-4 sm:p-5">
+              <Label
+                htmlFor="workYears"
+                className="flex items-center gap-2 text-sm font-medium text-[var(--navy-800)] mb-3"
+              >
+                <span className="text-[var(--blue-500)]">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M10 6v4l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </span>
+                工作年限
+                <span className="text-red-400 text-xs">*</span>
+              </Label>
+              <Select
+                value={watchedValues.workYears}
+                onValueChange={(val) =>
+                  setValue("workYears", val ?? "", { shouldValidate: true })
+                }
+              >
+                <SelectTrigger
+                  id="workYears"
+                  className="w-full h-11 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all data-[placeholder]:text-[var(--muted-foreground)]/50"
+                >
+                  <SelectValue placeholder="选择工作年限">
+                    {watchedValues.workYears
+                      ? (WORK_YEARS_OPTIONS.find((o) => o.value === watchedValues.workYears)?.label ?? "选择工作年限")
+                      : "选择工作年限"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {WORK_YEARS_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.workYears && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xs text-red-500 mt-2 flex items-center gap-1"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M6 4v2.5M6 8h.005" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  {errors.workYears.message}
+                </motion.p>
+              )}
+            </div>
+          </motion.div>
+
+          {/* 5. 简历上传（可选） */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.42, ease: cubicEase }}
+          >
+            <div className="glass-card rounded-xl p-4 sm:p-5">
+              <Label className="flex items-center gap-2 text-sm font-medium text-[var(--navy-800)] mb-3">
+                <span className="text-[var(--blue-500)]">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M12 2H5a1 1 0 00-1 1v14a1 1 0 001 1h10a1 1 0 001-1V6l-4-4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                    <path d="M12 2v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                    <path d="M7 11h6M7 14h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </span>
+                简历上传（选填）
+              </Label>
+              <p className="text-xs text-[var(--muted-foreground)] mb-3">
+                上传后，AI 将结合你的实习、项目、技能给出更个性化的分析和简历诊断；不传也能生成报告。
+              </p>
+              <FileUpload
+                value={resume}
+                onChange={setResume}
+                accept=".pdf,.doc,.docx"
+                maxSizeMB={5}
+              />
+            </div>
+          </motion.div>
+
+          {/* 6. 提交按钮 —— 移动端 sticky 底部 */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.5, ease: cubicEase }}
+            className="pt-2 sm:pt-4"
+          >
+            <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full h-12 text-base font-medium bg-[var(--navy-900)] hover:bg-[var(--navy-800)] text-white rounded-xl btn-glow transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <span className="flex items-center gap-2">
+                  {isSubmitting ? "提交中…" : "下一步"}
+                  {!isSubmitting && (
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                      <path
+                        d="M6.5 4L12 9l-5.5 5"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </span>
+              </Button>
+              <p className="text-center text-xs text-[var(--muted-foreground)] mt-3 sm:mt-4">
+                信息仅用于本次报告生成，不会存储或分享给第三方
+              </p>
+          </motion.div>
+        </form>
+      </div>
+    </div>
   );
 }

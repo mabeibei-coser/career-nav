@@ -381,13 +381,13 @@ export default function LoadingPage() {
 
       if (!fdStr || !scStr) {
         // 没有 formData 或 scoring → 用户没走 form/quiz 流程，跳回 form
-        router.replace("/form");
+        router.replace("/");
         return;
       }
       formData = JSON.parse(fdStr) as JobFormData;
       scoring = JSON.parse(scStr) as ScoringResult;
       if (!formData?.targetPosition || !scoring?.fourDim) {
-        router.replace("/form");
+        router.replace("/");
         return;
       }
       quizAnswers = qaStr ? (JSON.parse(qaStr) as QuizAnswer[]) : [];
@@ -422,7 +422,7 @@ export default function LoadingPage() {
         }
       }
     } catch {
-      router.replace("/form");
+      router.replace("/");
       return;
     }
 
@@ -522,7 +522,7 @@ export default function LoadingPage() {
   const handleUseMock = () => {
     const p = payloadRef.current;
     if (!p) {
-      router.replace("/form");
+      router.replace("/");
       return;
     }
     const mock = buildMockReport(p.formData, p.scoring, p.interviewQ1Q2);
