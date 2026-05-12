@@ -88,9 +88,12 @@ export function startQuizStream(formData: JobFormData): void {
           }
 
           try {
-            const event = JSON.parse(payload) as { type: string; question?: QuizQuestion };
+            const event = JSON.parse(payload) as { type: string; question?: QuizQuestion; message?: string };
             if (event.type === "question" && event.question) {
               state.questions.push(event.question);
+              notifyListeners(state);
+            } else if (event.type === "error") {
+              state.error = event.message || "题目生成失败";
               notifyListeners(state);
             }
           } catch { /* malformed SSE event, skip */ }

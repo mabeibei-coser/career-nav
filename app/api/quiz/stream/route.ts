@@ -52,12 +52,6 @@ export async function POST(req: NextRequest) {
         emittedCount++;
       };
 
-      const supplementFallback = () => {
-        for (let i = emittedCount; i < TOTAL_QUESTIONS; i++) {
-          emitQuestion(FALLBACK_QUESTIONS[i]);
-        }
-      };
-
       try {
         await streamFromDeepseek(formData, emitQuestion);
       } catch (dsErr) {
@@ -75,8 +69,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      if (emittedCount < TOTAL_QUESTIONS) {
-        supplementFallback();
+      if (emittedCount === 0) {
+        for (const q of FALLBACK_QUESTIONS) emitQuestion(q);
       }
 
       send("[DONE]");
