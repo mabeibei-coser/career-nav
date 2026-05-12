@@ -23,17 +23,17 @@ const AUTO_NEXT_DELAY_MS = 400;
 const EXPECTED_TOTAL = 8;
 
 const OPTION_LABEL_COLORS: Record<"A" | "B" | "C" | "D", string> = {
-  A: "bg-blue-100 text-blue-700",
-  B: "bg-emerald-100 text-emerald-700",
-  C: "bg-violet-100 text-violet-700",
-  D: "bg-amber-100 text-amber-700",
+  A: "bg-[var(--blue-100)] text-[var(--blue-600)]",
+  B: "bg-[var(--blue-100)] text-[var(--blue-600)]",
+  C: "bg-[var(--blue-100)] text-[var(--blue-600)]",
+  D: "bg-[var(--blue-100)] text-[var(--blue-600)]",
 };
 
 const OPTION_LABEL_ACTIVE_COLORS: Record<"A" | "B" | "C" | "D", string> = {
-  A: "bg-blue-500 text-white",
-  B: "bg-emerald-500 text-white",
-  C: "bg-violet-500 text-white",
-  D: "bg-amber-500 text-white",
+  A: "bg-[var(--blue-500)] text-white",
+  B: "bg-[var(--blue-500)] text-white",
+  C: "bg-[var(--blue-500)] text-white",
+  D: "bg-[var(--blue-500)] text-white",
 };
 
 interface AnswerMap {
@@ -124,14 +124,14 @@ export default function QuizPage() {
 
   const currentQ = questions[currentIndex];
   const loadedTotal = questions.length;
-  const total = EXPECTED_TOTAL;
-  const isLast = loadedTotal === EXPECTED_TOTAL && currentIndex === EXPECTED_TOTAL - 1;
+  const total = streamDone ? loadedTotal : EXPECTED_TOTAL;
+  const isLast = streamDone && currentIndex === loadedTotal - 1;
   const needsWaitNext = !isLast && currentIndex >= loadedTotal - 1 && !streamDone;
   const selectedLabel = currentQ ? answers[currentQ.id] : undefined;
   const answeredCount = Object.keys(answers).length;
   const allAnswered =
-    loadedTotal === EXPECTED_TOTAL && questions.every((q) => answers[q.id]);
-  const progressPct = ((currentIndex + 1) / total) * 100;
+    streamDone && loadedTotal > 0 && questions.every((q) => answers[q.id]);
+  const progressPct = ((currentIndex + 1) / Math.max(total, 1)) * 100;
 
   const persistAnswers = useCallback(
     (map: AnswerMap, qs: QuizQuestion[]): QuizAnswer[] => {
