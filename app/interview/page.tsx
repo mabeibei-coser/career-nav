@@ -11,6 +11,7 @@ import { StepIndicator } from "@/components/ui/step-indicator";
 import { useAudioRecorder } from "@/lib/hooks/use-audio-recorder";
 import { useAudioVisualizer } from "@/lib/hooks/use-audio-visualizer";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
+import { ensureAudioCtxUnlocked } from "@/lib/audio-normalizer";
 import { buildQ3Q4 } from "@/lib/interview-questions";
 import { startAfterQ3 } from "@/lib/report-bg-runner";
 import type {
@@ -77,7 +78,7 @@ function buildRawAnswersSummary(answers: InterviewAnswer[]): string {
 
 function unlockAudio() {
   try {
-    // 播放一段极短静音 MP3，触发 iOS/WebKit 对 AudioContext 的授权，
+    // 播放一段极短静音 MP3，触发 iOS/WebKit 对 HTMLAudioElement 的授权，
     // 同时激活 Android MediaSession（防止首次播放音量偏低）。
     // 不调用 .pause()，让它自然播完（约 0.05s），确保媒体会话充分初始化。
     const a = new Audio(
@@ -88,6 +89,9 @@ function unlockAudio() {
   } catch {
     // 降级：忽略（非 iOS/Android 环境不影响）
   }
+  // 同步确保 Web Audio AudioContext 是 running 状态 —— 响度归一化的主播放路径
+  // 依赖它。`handleStart` 在用户手势里调用 `unlockAudio`，满足 iOS 的 resume 要求。
+  ensureAudioCtxUnlocked();
 }
 
 // ---------- 主组件 ----------
