@@ -114,6 +114,8 @@ export default function HomePage() {
     sessionStorage.removeItem("quizAnswers");
     sessionStorage.removeItem("reportData");
     sessionStorage.removeItem("q3q4Lock");
+    sessionStorage.removeItem("interviewQ1Q2");
+    sessionStorage.removeItem("micPermission");
     if (resume?.resumeRef) sessionStorage.setItem("resumeRef", resume.resumeRef);
     else sessionStorage.removeItem("resumeRef");
     if (resume?.resumeFilename) sessionStorage.setItem("resumeFilename", resume.resumeFilename);
@@ -124,7 +126,7 @@ export default function HomePage() {
     // 🚀 Layer 3 优化：在页面跳转前立即触发 LLM 生成，
     // quiz page mount 时可直接消费已在途的 Promise，节省 ~2-3s 页面过渡时间
     startQuizPrefetch(payload);
-    router.push("/quiz");
+    router.push("/preparing");
   };
 
   useEffect(() => {
@@ -132,7 +134,8 @@ export default function HomePage() {
     clearReportPrefetch();
     clearQuizPrefetch(); // 清掉上次的 quiz 预触发（用户重填时身份/学历可能变）
     clearBgSections(); // 用户回入口重填时清掉 quiz 阶段启动的后台任务
-    // 后台预编译 /quiz 路由（dev 模式消除首次跳转的"Compiling..."等待）
+    // 后台预编译路由（dev 模式消除首次跳转的"Compiling..."等待）
+    router.prefetch("/preparing");
     router.prefetch("/quiz");
   }, [router]);
 

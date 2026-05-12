@@ -54,7 +54,7 @@ function canUseVoiceRecording(): boolean {
 }
 
 const GREETING_TEXT =
-  "你好，我是你的 AI 职业顾问，接下来我会问你 4 个问题，帮你完善这份定位报告。";
+  "下面进入语音访谈，一共 4 个问题，请按住麦克风作答。";
 
 // 用 Q1/Q2/Q3 答案拼 raw "summary" 文本，作为 /loading 页的兜底
 // Q4 答案不入报告（仅为缓冲时间）
@@ -227,28 +227,46 @@ export default function InterviewPage() {
       })
       .catch(() => {}); // 失败静默降级，不影响主流程
 
-    // 阶段 1：拉 Q1Q2（API 动态生成）
+    // 阶段 1：拉 Q1Q2（优先消费 /intro 预热结果；没有再 API 动态生成）
     (async () => {
       let q1q2: InterviewQuestion[] = [];
+
+      // 1a) 优先消费 /intro 页预热的 Q1Q2（一次性，用后即清）
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/interview/question`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ formData }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as {
-          questions: InterviewQuestion[];
-        };
-        if (!Array.isArray(data?.questions) || data.questions.length !== 2) {
-          throw new Error("Q1Q2 长度不为 2");
+        const cached = sessionStorage.getItem("interviewQ1Q2");
+        if (cached) {
+          const parsed = JSON.parse(cached) as InterviewQuestion[];
+          if (Array.isArray(parsed) && parsed.length === 2) {
+            q1q2 = parsed;
+            sessionStorage.removeItem("interviewQ1Q2");
+          }
         }
-        q1q2 = data.questions;
-      } catch (e) {
-        console.error("[interview] fetch Q1Q2 failed:", e);
-        setError("获取问题失败，请刷新重试");
-        setPhaseSync("error");
-        return;
+      } catch {
+        /* 缓存损坏，落回 fetch */
+      }
+
+      // 1b) 无预热缓存 → 现拉
+      if (q1q2.length !== 2) {
+        try {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/interview/question`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ formData }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = (await res.json()) as {
+            questions: InterviewQuestion[];
+          };
+          if (!Array.isArray(data?.questions) || data.questions.length !== 2) {
+            throw new Error("Q1Q2 长度不为 2");
+          }
+          q1q2 = data.questions;
+        } catch (e) {
+          console.error("[interview] fetch Q1Q2 failed:", e);
+          setError("获取问题失败，请刷新重试");
+          setPhaseSync("error");
+          return;
+        }
       }
 
       // 阶段 2：抽 Q3Q4（题库自抽，结果锁 sessionStorage）
@@ -804,7 +822,7 @@ export default function InterviewPage() {
                     boxShadow: "0 4px 16px rgba(59,130,246,0.35)",
                   }}
                 >
-                  准备好了，开始访谈
+                  开始访谈
                 </motion.button>
               )
             )}
