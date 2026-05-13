@@ -57,7 +57,6 @@ function PositionCard({
   const safeIndustries = Array.isArray(rec.industries) ? rec.industries : [];
   const coreResponsibilities = Array.isArray(rec.coreResponsibilities) ? rec.coreResponsibilities : [];
   const coreCompetencies = Array.isArray(rec.coreCompetencies) ? rec.coreCompetencies : [];
-  const score = typeof rec.matchScore === "number" ? Math.max(0, Math.min(100, Math.round(rec.matchScore))) : null;
 
   return (
     <Wrapper
@@ -90,12 +89,6 @@ function PositionCard({
         >
           {rec.position || "—"}
         </h3>
-        {score !== null && (
-          <div className="report-kpi shrink-0" aria-label={`匹配度 ${score}%`}>
-            <span className="n">{score}</span>
-            <span className="u">%</span>
-          </div>
-        )}
       </div>
 
       {/* 推荐理由 */}
@@ -138,22 +131,14 @@ function PositionCard({
                   <div key={i}>
                     <div className="flex items-baseline justify-between mb-1 text-[12px]">
                       <span className="text-[var(--navy-800)] font-medium">{comp.name}</span>
-                      <span className="inline-flex items-baseline gap-1.5">
-                        <span
-                          className="tabular-nums font-semibold"
-                          style={{ color: style.tierColor }}
-                        >
-                          {compScore}
-                        </span>
-                        <span
-                          className="px-1.5 py-[1px] rounded text-[10px] font-medium"
-                          style={{
-                            color: style.tierColor,
-                            background: `color-mix(in oklch, ${style.tierColor} 12%, transparent)`,
-                          }}
-                        >
-                          {style.tierLabel}
-                        </span>
+                      <span
+                        className="px-1.5 py-[1px] rounded text-[10px] font-medium"
+                        style={{
+                          color: style.tierColor,
+                          background: `color-mix(in oklch, ${style.tierColor} 12%, transparent)`,
+                        }}
+                      >
+                        {style.tierLabel}
                       </span>
                     </div>
                     <div className="h-1.5 rounded-full bg-[var(--blue-100)] overflow-hidden">
