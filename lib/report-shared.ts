@@ -120,6 +120,14 @@ export function tryFixAndParse(jsonStr: string): unknown {
     return JSON.parse(jsonStr);
   } catch {
     let fixed = jsonStr;
+    // Normalize Chinese typographic quotes → ASCII (common in LLM Chinese outputs)
+    fixed = fixed.replace(/[“”]/g, '"');
+    fixed = fixed.replace(/[‘’]/g, "'");
+    // Normalize full-width colon after a JSON key: "key"：value → "key":value
+    fixed = fixed.replace(/("(?:[^"\\]|\\.)*")\s*：/g, "$1:");
+    // Normalize full-width comma between elements
+    fixed = fixed.replace(/，/g, ",");
+    try { return JSON.parse(fixed); } catch { /* continue */ }
     // Strip control characters (except \n \r \t) that break JSON strings
     fixed = fixed.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
     // Remove trailing commas before ] or }
