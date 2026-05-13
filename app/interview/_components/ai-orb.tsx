@@ -124,20 +124,21 @@ export function AiOrb({ state, size = 220 }: AiOrbProps) {
         }
       `}</style>
 
-      {/* halo glow */}
+      {/* halo glow — 用 radial-gradient 代替 filter:blur 避免矩形渲染 artifact */}
       <motion.div
         className="absolute rounded-full pointer-events-none"
         style={{
-          width: orbSize + 60,
-          height: orbSize + 60,
-          filter: "blur(40px)",
+          width: orbSize + 80,
+          height: orbSize + 80,
         }}
         animate={{
-          backgroundColor: colors.halo,
+          background: [
+            `radial-gradient(circle, ${colors.halo} 0%, transparent 70%)`,
+          ],
           scale: haloScale,
         }}
         transition={{
-          backgroundColor: { duration: 1.2, ease: "easeInOut" },
+          background: { duration: 1.2, ease: "easeInOut" },
           scale: {
             duration: haloDuration,
             repeat: Infinity,

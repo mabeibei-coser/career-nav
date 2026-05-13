@@ -448,12 +448,14 @@ export default function HomePage() {
               <p className="text-xs text-[var(--muted-foreground)] mb-3">
                 上传后，AI 将结合你的教育、工作、项目经验，给出个性化的分析和简历诊断
               </p>
-              <FileUpload
-                value={resume}
-                onChange={(v) => { setResume(v); if (v) setResumeError(false); }}
-                accept=".pdf,.doc,.docx"
-                maxSizeMB={5}
-              />
+              <div className={resumeError && !resume ? "rounded-xl ring-2 ring-red-400/50 ring-offset-1 transition-all" : ""}>
+                <FileUpload
+                  value={resume}
+                  onChange={(v) => { setResume(v); if (v) setResumeError(false); }}
+                  accept=".pdf,.doc,.docx"
+                  maxSizeMB={5}
+                />
+              </div>
               {resumeError && (
                 <motion.p
                   initial={{ opacity: 0, y: -4 }}
