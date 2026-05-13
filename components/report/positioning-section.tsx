@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import { motion } from "framer-motion";
 import { Crown, Star } from "lucide-react";
 import { SectionWrapper } from "./section-wrapper";
@@ -15,21 +14,6 @@ interface Props {
 }
 
 const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];
-
-/** 能力分档：参考 career-report 的 优/良/中/待强化 */
-const BAR_GRADIENT = "linear-gradient(90deg, var(--blue-400), var(--blue-500))";
-const BAR_GRADIENT_WEAK = "linear-gradient(90deg, oklch(0.82 0.05 240), var(--blue-300))";
-
-function getScoreStyle(score: number): {
-  gradient: string;
-  tierLabel: string;
-  tierColor: string;
-} {
-  if (score >= 85) return { gradient: BAR_GRADIENT, tierLabel: "优", tierColor: "var(--blue-500)" };
-  if (score >= 70) return { gradient: BAR_GRADIENT, tierLabel: "良", tierColor: "var(--blue-500)" };
-  if (score >= 60) return { gradient: BAR_GRADIENT, tierLabel: "中", tierColor: "var(--blue-400)" };
-  return { gradient: BAR_GRADIENT_WEAK, tierLabel: "待强化", tierColor: "oklch(0.55 0.06 240)" };
-}
 
 function PositionCard({
   rec,
@@ -55,8 +39,6 @@ function PositionCard({
       };
 
   const safeIndustries = Array.isArray(rec.industries) ? rec.industries : [];
-  const coreResponsibilities = Array.isArray(rec.coreResponsibilities) ? rec.coreResponsibilities : [];
-  const coreCompetencies = Array.isArray(rec.coreCompetencies) ? rec.coreCompetencies : [];
 
   return (
     <Wrapper
@@ -68,7 +50,7 @@ function PositionCard({
           : "border-[var(--blue-100)]"
       )}
     >
-      {/* 顶部：角标 + 岗位名 + 匹配度 */}
+      {/* 顶部：角标 + 岗位名 */}
       <div className="flex items-start gap-3 mb-4">
         <span
           className={cn(
@@ -93,76 +75,14 @@ function PositionCard({
 
       {/* 岗位综述 */}
       {rec.reasoning && (
-        <div className="mb-5">
-          <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-1.5">
-            岗位综述
-          </div>
-          <p className="text-[13.5px] leading-[1.7] text-[var(--navy-800)]">
-            {rec.reasoning}
-          </p>
-        </div>
+        <p className="text-[13.5px] leading-[1.75] text-[var(--navy-800)] mb-4">
+          {rec.reasoning}
+        </p>
       )}
-
-      {/* 核心职责 + 核心能力 */}
-      <div className="grid gap-5 md:grid-cols-2">
-        {/* 核心职责 */}
-        {coreResponsibilities.length > 0 && (
-          <div>
-            <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-2">
-              核心职责
-            </div>
-            <ul className="space-y-1.5">
-              {coreResponsibilities.map((resp, i) => (
-                <li key={i} className="flex items-start gap-2 text-[13.5px] text-[var(--navy-800)] leading-relaxed">
-                  <span className="mt-1.5 size-1.5 rounded-full bg-[var(--blue-500)] shrink-0" />
-                  {resp}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* 核心能力 */}
-        {coreCompetencies.length > 0 && (
-          <div>
-            <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-2">
-              核心能力要求
-            </div>
-            <div className="space-y-2.5">
-              {coreCompetencies.map((comp, i) => {
-                const compScore = typeof comp.score === "number" ? Math.max(0, Math.min(100, Math.round(comp.score))) : 0;
-                const style = getScoreStyle(compScore);
-                return (
-                  <div key={i}>
-                    <div className="flex items-baseline justify-between mb-1 text-[12px]">
-                      <span className="text-[var(--navy-800)] font-medium">{comp.name}</span>
-                      <span
-                        className="px-1.5 py-[1px] rounded text-[10px] font-medium"
-                        style={{
-                          color: style.tierColor,
-                          background: `color-mix(in oklch, ${style.tierColor} 12%, transparent)`,
-                        }}
-                      >
-                        {style.tierLabel}
-                      </span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-[var(--blue-100)] overflow-hidden">
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${compScore}%`, background: style.gradient }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* 行业方向 */}
       {safeIndustries.length > 0 && (
-        <div className="mt-5">
+        <div className="mb-4">
           <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-2">
             行业方向
           </div>
@@ -176,18 +96,18 @@ function PositionCard({
         </div>
       )}
 
-      {/* 为什么适合你（报告亮点） */}
+      {/* 为什么适合你 */}
       {rec.fitReason && (
-        <div className="mt-5 rounded-xl border border-[var(--blue-200)] bg-gradient-to-br from-[var(--blue-50)] to-white p-4 sm:p-5">
-          <div className="flex items-center gap-1.5 mb-2.5">
-            <svg className="size-4 text-[var(--blue-500)]" viewBox="0 0 16 16" fill="none" aria-hidden>
+        <div className="rounded-xl border border-[var(--blue-200)] bg-gradient-to-br from-[var(--blue-50)] to-white p-4">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <svg className="size-3.5 text-[var(--blue-500)]" viewBox="0 0 16 16" fill="none" aria-hidden>
               <path d="M8 1l2.35 4.76L16 6.54l-4 3.9.94 5.5L8 13.27l-4.94 2.67.94-5.5-4-3.9 5.65-.78L8 1z" fill="currentColor" />
             </svg>
-            <span className="text-[13px] font-bold text-[var(--blue-700)]">
+            <span className="text-[12px] font-bold text-[var(--blue-700)]">
               为什么适合你
             </span>
           </div>
-          <p className="text-[13.5px] leading-[1.85] text-[var(--navy-800)]">
+          <p className="text-[13.5px] leading-[1.75] text-[var(--navy-800)]">
             {rec.fitReason}
           </p>
         </div>
