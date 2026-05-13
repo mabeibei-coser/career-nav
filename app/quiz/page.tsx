@@ -401,7 +401,7 @@ export default function QuizPage() {
                 type="button"
                 onClick={handleSubmit}
                 disabled={!allAnswered || submitting}
-                className="h-12 px-7 rounded-xl bg-[var(--navy-900)] hover:bg-[var(--navy-800)] text-white btn-glow text-base font-medium"
+                className="h-12 px-7 rounded-xl bg-gradient-to-br from-[var(--blue-500)] to-[var(--blue-700)] hover:brightness-110 active:brightness-95 text-white btn-glow text-base font-medium transition-all duration-300"
               >
                 {submitting ? (
                   <>

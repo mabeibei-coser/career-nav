@@ -222,7 +222,7 @@ export default function IntroPage() {
           <Button
             onClick={handleStart}
             disabled={submitting}
-            className="w-full h-12 text-base font-medium bg-[var(--navy-900)] hover:bg-[var(--navy-800)] text-white rounded-xl btn-glow transition-all duration-300 disabled:opacity-75 disabled:cursor-wait"
+            className="w-full h-12 text-base font-medium bg-gradient-to-br from-[var(--blue-500)] to-[var(--blue-700)] hover:brightness-110 active:brightness-95 text-white rounded-xl btn-glow transition-all duration-300 disabled:opacity-75 disabled:cursor-wait"
           >
             <span className="flex items-center gap-2">
               {submitting ? (
