@@ -108,7 +108,6 @@ export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
   const scoreColor = getScoreColor(score);
 
   const issues = Array.isArray(data.issues) ? data.issues : [];
-  const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
 
   // SVG 圆环参数
   const ringSize = 92;
@@ -131,9 +130,7 @@ export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
       index={SECTION_INDEX}
       total={SECTION_TOTAL}
       meta={
-        <span>
-          {issues.length} 条可补充 · {suggestions.length} 条建议
-        </span>
+        <span>{issues.length} 条可补充</span>
       }
     >
       <div data-pdf-section="resume-diagnosis">
@@ -268,33 +265,8 @@ export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
           </div>
         )}
 
-        {/* 底部：改进建议（suggestions） */}
-        {suggestions.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-[var(--navy-900)] mb-3">
-              改进建议
-            </h3>
-            <Container className="space-y-2.5" {...containerProps}>
-              {suggestions.map((s, i) => {
-                const title = s?.title?.trim() || "（待补充）";
-                const detail = s?.detail?.trim() || "—";
-                return (
-                  <Item key={i} className="report-takeaway" {...itemProps}>
-                    <div className="text-[14px] font-semibold text-[var(--navy-900)] mb-1">
-                      {title}
-                    </div>
-                    <div className="text-[13.5px] leading-[1.7] text-[var(--navy-800)]">
-                      {detail}
-                    </div>
-                  </Item>
-                );
-              })}
-            </Container>
-          </div>
-        )}
-
         {/* 两端皆空时的兜底 */}
-        {issues.length === 0 && suggestions.length === 0 && (
+        {issues.length === 0 && (
           <p className="text-[13.5px] text-[var(--report-ink-soft)]">
             暂无具体反馈条目。
           </p>
