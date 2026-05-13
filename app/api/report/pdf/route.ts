@@ -61,10 +61,22 @@ export async function renderPdfBuffer(reportData: ReportData): Promise<Buffer> {
 
     // 关键：用 evaluateOnNewDocument 让"写 sessionStorage"脚本在每个页面加载
     // 最早期运行，**早于任何页面 JS**。
+    // report page 要求 formData / quizAnswers / scoring 三项都存在才渲染，
+    // 否则 redirect 到 /。必须从 reportData.meta 里提取并注入。
     const reportDataStr = JSON.stringify(reportData);
     await page.evaluateOnNewDocument((dataStr: string) => {
       try {
+        const data = JSON.parse(dataStr);
         window.sessionStorage.setItem("reportData", dataStr);
+        // report page 先检查这三项，缺一则 redirect → 必须注入
+        if (data?.meta?.formData) {
+          window.sessionStorage.setItem("formData", JSON.stringify(data.meta.formData));
+        }
+        if (data?.meta?.scoring) {
+          window.sessionStorage.setItem("scoring", JSON.stringify(data.meta.scoring));
+        }
+        // quizAnswers 报告页只检查存在性，用空数组占位即可
+        window.sessionStorage.setItem("quizAnswers", JSON.stringify(data?.meta?.quizAnswers || []));
       } catch {
         /* ignore storage errors */
       }
