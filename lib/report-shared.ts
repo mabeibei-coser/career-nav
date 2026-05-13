@@ -189,14 +189,6 @@ const SECTION_HARD_TIMEOUT_MS = 50_000;
 export async function callDeepseekJson<T>(
   opts: CallOptions & { timeoutMs?: number }
 ): Promise<T> {
-  // DeepSeek json_object 模式要求 prompt 内含 "json" 字符串
-  const combined = (opts.systemPrompt + "\n" + opts.userPrompt).toLowerCase();
-  if (!combined.includes("json")) {
-    throw new Error(
-      "callDeepseekJson: prompt must include 'json' literal for json_object mode"
-    );
-  }
-
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
@@ -213,9 +205,8 @@ export async function callDeepseekJson<T>(
         ],
         temperature: opts.temperature ?? 0.6,
         max_tokens: opts.maxTokens ?? 3000,
-        // 原生 JSON 模式：约束解码，强制输出合法 JSON
-        // 消除"用户要求我..."/"让我分析..."等前言污染
-        response_format: { type: "json_object" },
+        // 注意：astron-code-latest 在 json_object 模式下输出异常，故不启用
+        // response_format 由模型 prompt 约束控制，extractJson + tryFixAndParse 兜底
       },
       { signal: controller.signal }
     );
@@ -253,7 +244,7 @@ export async function callIflytekJson<T>(
         ],
         temperature: opts.temperature ?? 0.6,
         max_tokens: opts.maxTokens ?? 3000,
-        response_format: { type: "json_object" },
+        // 不启用 response_format，由 prompt 约束 + extractJson + tryFixAndParse 兜底
       },
       { signal: controller.signal }
     );

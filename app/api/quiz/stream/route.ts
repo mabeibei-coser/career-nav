@@ -108,7 +108,7 @@ async function streamFromDeepseek(
         ],
         temperature: 1.0,
         max_tokens: 4000,
-        response_format: { type: "json_object" },
+        // 不启用 response_format：astron-code-latest 在此模式下输出异常
         stream: true,
       },
       { signal: controller.signal },
@@ -148,7 +148,7 @@ async function generateFromIflytek(formData: JobFormData): Promise<QuizQuestion[
         ],
         temperature: 1.0,
         max_tokens: 4000,
-        response_format: { type: "json_object" },
+        // 不启用 response_format，由 prompt 约束兜底
       },
       { signal: controller.signal },
     );
