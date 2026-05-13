@@ -4,12 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, ListChecks, Mic } from "lucide-react";
-import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
-import {
-  blessAudio,
-  playWithBlessedAudio,
-  stopBlessedAudio,
-} from "@/lib/audio-bless";
+import { playWithBlessedAudio, stopBlessedAudio } from "@/lib/audio-bless";
 import { Button } from "@/components/ui/button";
 import type { InterviewQuestion, JobFormData } from "@/lib/types";
 
@@ -24,11 +19,10 @@ export default function IntroPage() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showButton, setShowButton] = useState(false);
+  // iOS 自动播放失败 → orb 上显示播放图标
+  const [showPlayHint, setShowPlayHint] = useState(false);
   const wasSpeakingRef = useRef(false);
-  // 保留 TTS base64 数据，iOS 自动播放失败时允许点击 orb 重试
   const ttsBase64Ref = useRef<string | null>(null);
-
-  const player = useAudioPlayer(() => setIsSpeaking(false));
 
   /* Show CTA only after TTS finishes (or 5s fallback) */
   useEffect(() => {
@@ -40,12 +34,9 @@ export default function IntroPage() {
   }, [isSpeaking]);
 
   useEffect(() => {
-    // 5s 兜底：仅在 TTS 完全没播放时触发（网络慢/TTS 接口挂）
-    // TTS 已开始播放（wasSpeakingRef=true）则不触发，等播放结束
     const shortTimer = setTimeout(() => {
       if (!wasSpeakingRef.current) setShowButton(true);
     }, 5000);
-    // 终极兜底：20s 后无论如何都显示
     const longTimer = setTimeout(() => setShowButton(true), 20000);
     return () => { clearTimeout(shortTimer); clearTimeout(longTimer); };
   }, []);
@@ -103,37 +94,44 @@ export default function IntroPage() {
     };
   }, [router]);
 
+  // 自动播放 TTS：Android 正常走 Web Audio，iOS 可能失败
   useEffect(() => {
     if (!ttsAudio) return;
-    // 保留原始 base64，点击 orb 时可重新播放
     ttsBase64Ref.current = ttsAudio;
-    setIsSpeaking(true);
-    const played = playWithBlessedAudio(ttsAudio, () => setIsSpeaking(false));
-    if (!played) {
-      player.play(ttsAudio);
-    }
     setTtsAudio(null);
-  }, [ttsAudio, player]);
 
-  // iOS Safari fallback：自动播放静默失败后，用户点 orb 触发手势播放
+    const startTime = Date.now();
+    setIsSpeaking(true);
+
+    playWithBlessedAudio(ttsAudio, () => {
+      setIsSpeaking(false);
+      // TTS 朗读全文至少 4-5 秒，2 秒内结束说明 iOS 自动播放被拒
+      if (Date.now() - startTime < 2000) {
+        setShowPlayHint(true);
+      }
+    });
+  }, [ttsAudio]);
+
+  // iOS fallback：用户点 orb → 直接 new Audio().play()，同步在手势栈里
   const handleOrbTap = useCallback(() => {
-    if (isSpeaking) return; // 正在播放，不重复触发
+    if (isSpeaking) return;
     const data = ttsBase64Ref.current;
     if (!data) return;
-    // 点击是 user gesture → 重新 bless + 播放
-    blessAudio();
+
+    const audio = new Audio("data:audio/mp3;base64," + data);
+    audio.volume = 1.0;
     setIsSpeaking(true);
-    const played = playWithBlessedAudio(data, () => setIsSpeaking(false));
-    if (!played) {
-      player.play(data);
-    }
-  }, [isSpeaking, player]);
+    setShowPlayHint(false);
+    audio.onended = () => setIsSpeaking(false);
+    audio.onerror = () => setIsSpeaking(false);
+    audio.play().catch(() => setIsSpeaking(false));
+  }, [isSpeaking]);
 
   const handleStart = () => {
     if (submitting) return;
     setSubmitting(true);
     stopBlessedAudio();
-    player.stop();
+    setIsSpeaking(false);
     router.push("/quiz");
   };
 
@@ -156,7 +154,7 @@ export default function IntroPage() {
           aria-label="点击播放语音"
           tabIndex={0}
         >
-          <SoftOrb speaking={isSpeaking} />
+          <SoftOrb speaking={isSpeaking} showPlayHint={showPlayHint} />
         </motion.div>
 
         <motion.h1
@@ -297,12 +295,26 @@ export default function IntroPage() {
 }
 
 /** Soft-edged orb with layered radial gradients — no overflow:hidden clipping. */
-function SoftOrb({ speaking }: { speaking: boolean }) {
+function SoftOrb({ speaking, showPlayHint }: { speaking: boolean; showPlayHint?: boolean }) {
   return (
     <div
       className="relative flex items-center justify-center"
       style={{ width: 186, height: 186 }}
     >
+      {/* iOS 自动播放失败提示：播放图标 */}
+      {showPlayHint && !speaking && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="absolute z-10 flex items-center justify-center size-14 rounded-full bg-white/80 backdrop-blur-sm"
+          style={{ boxShadow: "0 2px 12px rgba(59,130,246,0.2)" }}
+        >
+          <svg className="size-7 text-[var(--blue-600)] ml-0.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </motion.div>
+      )}
+
       {/* Ambient pulse glow */}
       <motion.div
         className="absolute rounded-full pointer-events-none"
