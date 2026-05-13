@@ -314,16 +314,30 @@ export default function ReportPage() {
     );
   }
 
-  // 从简历文本提取姓名（常见中文简历格式：开头 2-4 字中文名 / "姓名：XXX"）
+  // 从简历文本提取姓名
   const extractedName = (() => {
     const txt = meta.formData.resumeText;
     if (!txt) return "";
-    // 1) "姓名" 标签后的名字
-    const labelMatch = txt.match(/姓\s*名[\s:：]+([^\s,，\n]{2,4})/);
+    const CJK = "\\u4e00-\\u9fff";
+
+    // 1) "姓名" / "姓 名" / "名字" 标签后（允许无分隔符 "姓名张三"）
+    const labelRe = new RegExp(`(?:姓\\s*名|名\\s*字)[\\s:：]*([${CJK}]{2,5})`);
+    const labelMatch = txt.match(labelRe);
     if (labelMatch) return labelMatch[1];
-    // 2) 首行只有 2-4 个中文字（大概率是名字）
+
+    // 2) 首行开头 2-5 个中文字（后面可能跟手机号、邮箱、竖线等）
     const firstLine = txt.split(/[\n\r]/)[0]?.trim() ?? "";
-    if (/^[一-鿿]{2,4}$/.test(firstLine)) return firstLine;
+    const headRe = new RegExp(`^([${CJK}]{2,5})(?:\\s|[|·•,，]|$)`);
+    const headMatch = firstLine.match(headRe);
+    if (headMatch) return headMatch[1];
+
+    // 3) 前 10 行里找独立的 2-4 个中文字行（常见简历排版）
+    const lines = txt.split(/[\n\r]/).slice(0, 10);
+    const pureRe = new RegExp(`^[${CJK}]{2,4}$`);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (pureRe.test(trimmed)) return trimmed;
+    }
     return "";
   })();
   const displayName = extractedName || meta.formData.targetPosition;
