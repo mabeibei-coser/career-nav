@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, ListChecks, Mic } from "lucide-react";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import { playWithBlessedAudio, stopBlessedAudio } from "@/lib/audio-bless";
@@ -19,8 +19,24 @@ export default function IntroPage() {
   const [ttsAudio, setTtsAudio] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showButton, setShowButton] = useState(false);
+  const wasSpeakingRef = useRef(false);
 
   const player = useAudioPlayer(() => setIsSpeaking(false));
+
+  /* Show CTA only after TTS finishes (or 5s fallback) */
+  useEffect(() => {
+    if (isSpeaking) {
+      wasSpeakingRef.current = true;
+    } else if (wasSpeakingRef.current) {
+      setShowButton(true);
+    }
+  }, [isSpeaking]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowButton(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -156,12 +172,8 @@ export default function IntroPage() {
               <ListChecks className="shrink-0 size-[18px] text-[var(--blue-300)] mt-1" strokeWidth={1.8} />
             </div>
 
-            {/* Timeline connector — w-11 匹配徽章宽度，line 自动居中 */}
-            <div className="flex px-5 sm:px-6">
-              <div className="w-11 flex justify-center">
-                <div className="w-px h-5 bg-[var(--blue-200)]" />
-              </div>
-            </div>
+            {/* Divider */}
+            <div className="mx-5 sm:mx-6 border-t border-[var(--blue-100)]" />
 
             {/* Step 2 */}
             <div className="flex items-start gap-4 px-5 pb-5 sm:px-6 sm:pb-6">
@@ -196,53 +208,58 @@ export default function IntroPage() {
           </motion.div>
         </motion.div>
 
-        {/* CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: cubicEase, delay: 0.8 }}
-          className="w-full max-w-md mt-7 pb-[max(1rem,env(safe-area-inset-bottom))]"
-        >
-          <Button
-            onClick={handleStart}
-            disabled={submitting}
-            className="w-full h-12 text-base font-medium bg-gradient-to-br from-[var(--blue-500)] to-[var(--blue-700)] hover:brightness-110 active:brightness-95 text-white rounded-xl btn-glow transition-all duration-300 disabled:opacity-75 disabled:cursor-wait"
-          >
-            <span className="flex items-center gap-2">
-              {submitting ? (
-                <>
-                  <svg
-                    className="size-4 animate-spin"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    aria-hidden
-                  >
-                    <circle
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeOpacity="0.25"
-                      strokeWidth="2.5"
-                    />
-                    <path
-                      d="M22 12a10 10 0 0 1-10 10"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  正在准备测评…
-                </>
-              ) : (
-                <>
-                  准备好了，开始测评
-                  <ArrowRight className="size-4" strokeWidth={2} />
-                </>
-              )}
-            </span>
-          </Button>
-        </motion.div>
+        {/* CTA — hidden while AI speaks, appears after TTS finishes */}
+        <AnimatePresence>
+          {showButton && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 12 }}
+              transition={{ duration: 0.5, ease: cubicEase }}
+              className="w-full max-w-md mt-7 pb-[max(1rem,env(safe-area-inset-bottom))]"
+            >
+              <Button
+                onClick={handleStart}
+                disabled={submitting}
+                className="w-full h-12 text-base font-medium bg-gradient-to-br from-[var(--blue-500)] to-[var(--blue-700)] hover:brightness-110 active:brightness-95 text-white rounded-xl btn-glow transition-all duration-300 disabled:opacity-75 disabled:cursor-wait"
+              >
+                <span className="flex items-center gap-2">
+                  {submitting ? (
+                    <>
+                      <svg
+                        className="size-4 animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeOpacity="0.25"
+                          strokeWidth="2.5"
+                        />
+                        <path
+                          d="M22 12a10 10 0 0 1-10 10"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      正在准备测评…
+                    </>
+                  ) : (
+                    <>
+                      准备好了，开始测评
+                      <ArrowRight className="size-4" strokeWidth={2} />
+                    </>
+                  )}
+                </span>
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

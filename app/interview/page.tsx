@@ -807,7 +807,7 @@ export default function InterviewPage() {
                   exit={{ opacity: 0 }}
                   onClick={handleStart}
                   onTouchStart={(e) => { e.preventDefault(); handleStart(); }}
-                  className="px-7 py-3 text-white rounded-full text-sm font-medium active:scale-95 transition-all min-h-[44px] bg-gradient-to-br from-[var(--blue-500)] to-[var(--blue-700)] btn-glow"
+                  className="w-full max-w-md h-12 text-base font-medium bg-gradient-to-br from-[var(--blue-500)] to-[var(--blue-700)] hover:brightness-110 active:brightness-95 text-white rounded-xl btn-glow transition-all duration-300"
                 >
                   开始访谈
                 </motion.button>
