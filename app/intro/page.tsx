@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, ListChecks, Mic } from "lucide-react";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
-import { playWithBlessedAudio, stopBlessedAudio } from "@/lib/audio-bless";
+import {
+  blessAudio,
+  playWithBlessedAudio,
+  stopBlessedAudio,
+} from "@/lib/audio-bless";
 import { Button } from "@/components/ui/button";
 import type { InterviewQuestion, JobFormData } from "@/lib/types";
 
@@ -21,6 +25,8 @@ export default function IntroPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showButton, setShowButton] = useState(false);
   const wasSpeakingRef = useRef(false);
+  // 保留 TTS base64 数据，iOS 自动播放失败时允许点击 orb 重试
+  const ttsBase64Ref = useRef<string | null>(null);
 
   const player = useAudioPlayer(() => setIsSpeaking(false));
 
@@ -99,6 +105,8 @@ export default function IntroPage() {
 
   useEffect(() => {
     if (!ttsAudio) return;
+    // 保留原始 base64，点击 orb 时可重新播放
+    ttsBase64Ref.current = ttsAudio;
     setIsSpeaking(true);
     const played = playWithBlessedAudio(ttsAudio, () => setIsSpeaking(false));
     if (!played) {
@@ -106,6 +114,20 @@ export default function IntroPage() {
     }
     setTtsAudio(null);
   }, [ttsAudio, player]);
+
+  // iOS Safari fallback：自动播放静默失败后，用户点 orb 触发手势播放
+  const handleOrbTap = useCallback(() => {
+    if (isSpeaking) return; // 正在播放，不重复触发
+    const data = ttsBase64Ref.current;
+    if (!data) return;
+    // 点击是 user gesture → 重新 bless + 播放
+    blessAudio();
+    setIsSpeaking(true);
+    const played = playWithBlessedAudio(data, () => setIsSpeaking(false));
+    if (!played) {
+      player.play(data);
+    }
+  }, [isSpeaking, player]);
 
   const handleStart = () => {
     if (submitting) return;
@@ -123,13 +145,16 @@ export default function IntroPage() {
       <div className="fixed -bottom-20 -left-32 w-80 h-80 rounded-full bg-gradient-to-tr from-[var(--blue-300)] to-[var(--blue-100)] opacity-30 blur-3xl" />
 
       <div className="relative z-10 min-h-screen flex flex-col items-center px-5 py-6 sm:py-8">
-        {/* Soft orb — no hard edges */}
+        {/* Soft orb — no hard edges; tap to replay TTS on iOS */}
         <motion.div
           initial={{ opacity: 0, scale: 0.85 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, ease: cubicEase }}
-          className="mt-4 sm:mt-8 mb-4 sm:mb-5"
-          aria-hidden
+          className="mt-4 sm:mt-8 mb-4 sm:mb-5 cursor-pointer"
+          onClick={handleOrbTap}
+          role="button"
+          aria-label="点击播放语音"
+          tabIndex={0}
         >
           <SoftOrb speaking={isSpeaking} />
         </motion.div>

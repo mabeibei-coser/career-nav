@@ -10,6 +10,8 @@ import {
   decodeAndNormalize,
   ensureAudioCtxUnlocked,
   playNormalized,
+  startSilenceKeepAlive,
+  stopSilenceKeepAlive,
   type PlaybackHandle,
 } from "./audio-normalizer";
 
@@ -31,6 +33,10 @@ export function blessAudio() {
 
   // 同步解锁 Web Audio AudioContext（响度归一化的主播放路径）
   ensureAudioCtxUnlocked();
+
+  // iOS Safari: 用静音 buffer 保持 AudioContext 活跃，
+  // 防止 preparing 页 12s 动画期间被系统挂起
+  startSilenceKeepAlive();
 }
 
 // 用归一化路径播放 TTS base64。失败时降级到 blessed `<audio>` 裸播。
@@ -64,6 +70,9 @@ export function playWithBlessedAudio(
 }
 
 function playBlessedFallback(base64: string, onEnded?: () => void) {
+  // 走 fallback 说明 Web Audio 路径失败，停掉 keep-alive 释放资源
+  stopSilenceKeepAlive();
+
   if (!blessedAudio) {
     onEnded?.();
     return;
@@ -83,6 +92,7 @@ function playBlessedFallback(base64: string, onEnded?: () => void) {
 }
 
 export function stopBlessedAudio() {
+  stopSilenceKeepAlive();
   if (currentHandle) {
     currentHandle.stop();
     currentHandle = null;

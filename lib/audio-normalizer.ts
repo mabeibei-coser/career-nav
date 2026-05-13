@@ -108,6 +108,60 @@ export async function decodeAndNormalize(
   }
 }
 
+// ─── iOS AudioContext keep-alive ───
+// iOS Safari 会在用户手势后 ~4-8s 把 AudioContext 重新挂起。
+// 在 blessAudio() 到实际 TTS 播放之间（preparing 页 ≈12s），
+// 用一个 gain=0 的无限循环静音 buffer 保持 ctx 不被挂起。
+
+let keepAliveSource: AudioBufferSourceNode | null = null;
+let keepAliveGain: GainNode | null = null;
+
+export function startSilenceKeepAlive(): void {
+  stopSilenceKeepAlive();
+  const ctx = getCtx();
+  if (!ctx) return;
+  if (ctx.state === "running") {
+    doStartSilence(ctx);
+  } else {
+    // ctx 可能还在 resume() 中，等状态切换后再挂
+    const onStateChange = () => {
+      if (ctx.state === "running") {
+        ctx.removeEventListener("statechange", onStateChange);
+        doStartSilence(ctx);
+      }
+    };
+    ctx.addEventListener("statechange", onStateChange);
+  }
+}
+
+function doStartSilence(ctx: AudioContext): void {
+  try {
+    const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const gain = ctx.createGain();
+    gain.gain.value = 0; // 完全静音，仅保持 ctx 活跃
+    src.connect(gain);
+    gain.connect(ctx.destination);
+    src.start(0);
+    keepAliveSource = src;
+    keepAliveGain = gain;
+  } catch { /* 创建失败忽略 */ }
+}
+
+export function stopSilenceKeepAlive(): void {
+  if (keepAliveSource) {
+    try { keepAliveSource.stop(0); } catch { /* already stopped */ }
+    try { keepAliveSource.disconnect(); } catch { /* already disconnected */ }
+    keepAliveSource = null;
+  }
+  if (keepAliveGain) {
+    try { keepAliveGain.disconnect(); } catch { /* already disconnected */ }
+    keepAliveGain = null;
+  }
+}
+
 export interface PlaybackHandle {
   stop: () => void;
 }
@@ -117,6 +171,9 @@ export function playNormalized(
   audio: NormalizedAudio,
   onEnded?: () => void,
 ): PlaybackHandle {
+  // 真实音频开始播放，停掉 keep-alive（不再需要占位）
+  stopSilenceKeepAlive();
+
   const ctx = getCtx();
   if (!ctx) {
     onEnded?.();
