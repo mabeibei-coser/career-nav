@@ -16,12 +16,19 @@ interface Props {
 
 const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
-// 能力分档（与 overview 一致）
-function getTier(score: number): { label: string; color: string; bg: string } {
-  if (score >= 80) return { label: "高", color: "var(--blue-700)", bg: "var(--blue-50)" };
-  if (score >= 60) return { label: "中高", color: "oklch(0.50 0.14 210)", bg: "oklch(0.97 0.02 210)" };
-  if (score >= 40) return { label: "中", color: "oklch(0.55 0.14 55)", bg: "oklch(0.97 0.04 55)" };
-  return { label: "基础", color: "oklch(0.50 0.16 25)", bg: "oklch(0.97 0.04 25)" };
+/** 能力分档：参考 career-report 的 优/良/中/待强化 */
+const BAR_GRADIENT = "linear-gradient(90deg, var(--blue-400), var(--blue-500))";
+const BAR_GRADIENT_WEAK = "linear-gradient(90deg, oklch(0.82 0.05 240), var(--blue-300))";
+
+function getScoreStyle(score: number): {
+  gradient: string;
+  tierLabel: string;
+  tierColor: string;
+} {
+  if (score >= 85) return { gradient: BAR_GRADIENT, tierLabel: "优", tierColor: "var(--blue-500)" };
+  if (score >= 70) return { gradient: BAR_GRADIENT, tierLabel: "良", tierColor: "var(--blue-500)" };
+  if (score >= 60) return { gradient: BAR_GRADIENT, tierLabel: "中", tierColor: "var(--blue-400)" };
+  return { gradient: BAR_GRADIENT_WEAK, tierLabel: "待强化", tierColor: "oklch(0.55 0.06 240)" };
 }
 
 function PositionCard({
@@ -56,29 +63,28 @@ function PositionCard({
     <Wrapper
       {...(motionProps as Record<string, unknown>)}
       className={cn(
-        "relative report-card p-5 break-inside-avoid",
-        isPrimary &&
-          "ring-2 ring-[var(--blue-500)] border-[var(--blue-500)] bg-gradient-to-br from-[var(--blue-50)] to-white"
+        "rounded-xl border bg-white p-5 break-inside-avoid",
+        isPrimary
+          ? "border-[var(--blue-500)] ring-1 ring-[var(--blue-500)]"
+          : "border-[var(--blue-100)]"
       )}
     >
-      {/* 角标：首选 / 次选 */}
-      <span
-        className={cn(
-          "absolute -top-2.5 right-4 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold shadow-sm",
-          isPrimary
-            ? "border-[var(--blue-500)] bg-[var(--blue-500)] text-white"
-            : "border-[var(--blue-200)] bg-white text-[var(--navy-700)]"
-        )}
-      >
-        <Icon className="size-3" />
-        {isPrimary ? "首选" : "次选"}
-      </span>
-
-      {/* 顶部：岗位名称 + 匹配度 */}
-      <div className="flex items-start justify-between gap-3 mb-3">
+      {/* 顶部：角标 + 岗位名 + 匹配度 */}
+      <div className="flex items-start gap-3 mb-4">
+        <span
+          className={cn(
+            "shrink-0 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold",
+            isPrimary
+              ? "border-[var(--blue-500)] bg-[var(--blue-500)] text-white"
+              : "border-[var(--blue-200)] bg-white text-[var(--navy-700)]"
+          )}
+        >
+          <Icon className="size-3" />
+          {isPrimary ? "首选" : "次选"}
+        </span>
         <h3
           className={cn(
-            "font-bold tracking-tight leading-tight text-[var(--navy-950)]",
+            "flex-1 min-w-0 font-bold tracking-tight leading-tight text-[var(--navy-950)]",
             isPrimary ? "text-[20px] sm:text-[22px]" : "text-[18px] sm:text-[20px]"
           )}
         >
@@ -92,67 +98,81 @@ function PositionCard({
         )}
       </div>
 
-      {/* reasoning */}
+      {/* 推荐理由 */}
       {rec.reasoning && (
-        <p className="text-[13.5px] leading-[1.65] text-[var(--navy-800)] mb-4">
+        <p className="text-[13.5px] leading-[1.7] text-[var(--navy-800)] mb-5">
           {rec.reasoning}
         </p>
       )}
 
-      {/* 核心职责 */}
-      {coreResponsibilities.length > 0 && (
-        <div className="mb-4">
-          <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-2">
-            核心职责
+      {/* 核心职责 + 核心能力 */}
+      <div className="grid gap-5 md:grid-cols-2">
+        {/* 核心职责 */}
+        {coreResponsibilities.length > 0 && (
+          <div>
+            <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-2">
+              核心职责
+            </div>
+            <ul className="space-y-1.5">
+              {coreResponsibilities.map((resp, i) => (
+                <li key={i} className="flex items-start gap-2 text-[13.5px] text-[var(--navy-800)] leading-relaxed">
+                  <span className="mt-1.5 size-1.5 rounded-full bg-[var(--blue-500)] shrink-0" />
+                  {resp}
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="space-y-1.5">
-            {coreResponsibilities.map((resp, i) => (
-              <li key={i} className="flex items-start gap-2 text-[13px] text-[var(--navy-800)]">
-                <span className="mt-1.5 size-1.5 rounded-full bg-[var(--blue-500)] shrink-0" />
-                {resp}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+        )}
 
-      {/* 核心能力 */}
-      {coreCompetencies.length > 0 && (
-        <div className="mb-4">
-          <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-2">
-            核心能力要求
-          </div>
-          <div className="space-y-2">
-            {coreCompetencies.map((comp, i) => {
-              const compScore = typeof comp.score === "number" ? Math.max(0, Math.min(100, Math.round(comp.score))) : 0;
-              const tier = getTier(compScore);
-              return (
-                <div key={i}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[12.5px] text-[var(--navy-800)]">{comp.name}</span>
-                    <span
-                      className="text-[11px] font-semibold px-1.5 py-0.5 rounded"
-                      style={{ color: tier.color, background: tier.bg }}
-                    >
-                      {tier.label}
-                    </span>
+        {/* 核心能力 */}
+        {coreCompetencies.length > 0 && (
+          <div>
+            <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-2">
+              核心能力要求
+            </div>
+            <div className="space-y-2.5">
+              {coreCompetencies.map((comp, i) => {
+                const compScore = typeof comp.score === "number" ? Math.max(0, Math.min(100, Math.round(comp.score))) : 0;
+                const style = getScoreStyle(compScore);
+                return (
+                  <div key={i}>
+                    <div className="flex items-baseline justify-between mb-1 text-[12px]">
+                      <span className="text-[var(--navy-800)] font-medium">{comp.name}</span>
+                      <span className="inline-flex items-baseline gap-1.5">
+                        <span
+                          className="tabular-nums font-semibold"
+                          style={{ color: style.tierColor }}
+                        >
+                          {compScore}
+                        </span>
+                        <span
+                          className="px-1.5 py-[1px] rounded text-[10px] font-medium"
+                          style={{
+                            color: style.tierColor,
+                            background: `color-mix(in oklch, ${style.tierColor} 12%, transparent)`,
+                          }}
+                        >
+                          {style.tierLabel}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-[var(--blue-100)] overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${compScore}%`, background: style.gradient }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-1.5 rounded-full bg-[var(--blue-100)] overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${compScore}%`, background: "var(--primary)" }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* industries 标签云 */}
+      {/* 行业方向 */}
       {safeIndustries.length > 0 && (
-        <div className="mb-4">
+        <div className="mt-5">
           <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-2">
             行业方向
           </div>
@@ -168,16 +188,15 @@ function PositionCard({
 
       {/* 为什么适合你 */}
       {rec.fitReason && (
-        <div className="border-l-[3px] border-[var(--blue-400)] pl-3 py-1 mb-3">
-          <div className="text-[11px] font-semibold text-[var(--report-ink-muted)] mb-1">
+        <div className="mt-5 rounded-lg border-l-4 border-[var(--blue-500)] bg-[var(--blue-50)]/60 px-4 py-3">
+          <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--blue-700)] mb-1.5">
             为什么适合你
           </div>
-          <p className="text-[13px] leading-[1.65] text-[var(--navy-800)]">
+          <p className="text-[13.5px] leading-[1.7] text-[var(--navy-800)]">
             {rec.fitReason}
           </p>
         </div>
       )}
-
     </Wrapper>
   );
 }
@@ -216,7 +235,7 @@ export default function PositioningSection({
       total={total}
       takeaway={takeaway}
     >
-      <div className="grid gap-4 md:grid-cols-2 md:gap-5 pt-1">
+      <div className="space-y-5 pt-1">
         <PositionCard
           rec={data.primary}
           variant="primary"

@@ -185,18 +185,13 @@ export interface ResumeDiagnosis {
   }[];
 }
 
-// ⑤ 行动建议：投递 + 技能 + 面试要点
+// ⑤ 行动计划：最重要的三件事 + 时间点
 export interface Advice {
-  applyDirection: {
-    channel: string;
-    tip: string;
+  topThree: {
+    title: string;
+    detail: string;
+    deadline: string;
   }[];
-  skillUp: {
-    skill: string;
-    resource: string;
-    duration: string;
-  }[];
-  interviewTips: string[];
 }
 
 export interface ReportData {

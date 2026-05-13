@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { Clock } from "lucide-react";
 import { SectionWrapper } from "./section-wrapper";
 import { useReportRender } from "./report-context";
 import type { Advice } from "@/lib/types";
@@ -11,8 +12,16 @@ interface Props {
   total: number;
 }
 
+const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+const STEP_ACCENTS = [
+  { num: "var(--blue-600)", border: "var(--blue-500)", bg: "var(--blue-50)" },
+  { num: "oklch(0.50 0.14 210)", border: "oklch(0.65 0.12 210)", bg: "oklch(0.97 0.03 210)" },
+  { num: "oklch(0.48 0.14 165)", border: "oklch(0.60 0.14 165)", bg: "oklch(0.97 0.03 165)" },
+];
+
 const PUBLIC_GUIDE = (
-  <div className="mt-6 p-4 rounded-md bg-[var(--blue-50)] border border-[var(--blue-200)] text-[14px] leading-[1.7] text-[var(--report-ink-soft)]">
+  <div className="mt-6 p-4 rounded-lg bg-[var(--blue-50)] border border-[var(--blue-200)] text-[13.5px] leading-[1.7] text-[var(--report-ink-soft)]">
     本评估为参考性质，实际岗位匹配请前往
     <a
       href="https://careers.sh.gov.cn"
@@ -30,146 +39,88 @@ const PUBLIC_GUIDE = (
 export default function AdviceSection({ data, index, total }: Props) {
   const { exporting } = useReportRender();
 
-  // 为空兜底：底部通用引导仍显示
   if (!data) {
     return (
       <SectionWrapper
         id="advice"
-        title="下一步行动建议"
+        title="下一步行动计划"
         index={index}
         total={total}
       >
         <p className="text-[14px] text-[var(--report-ink-muted)]">
-          ⏳ 行动建议生成中…
+          ⏳ 行动计划生成中…
         </p>
         {PUBLIC_GUIDE}
       </SectionWrapper>
     );
   }
 
-  const applyDirection = Array.isArray(data.applyDirection)
-    ? data.applyDirection
-    : [];
-  const skillUp = Array.isArray(data.skillUp) ? data.skillUp : [];
-  const interviewTips = Array.isArray(data.interviewTips)
-    ? data.interviewTips
-    : [];
-
-  const fadeIn = exporting
-    ? {}
-    : {
-        initial: { opacity: 0, y: 8 },
-        animate: { opacity: 1, y: 0 },
-        transition: { duration: 0.3 },
-      };
-
-  const stagger = (i: number) =>
-    exporting
-      ? {}
-      : {
-          initial: { opacity: 0, y: 8 },
-          animate: { opacity: 1, y: 0 },
-          transition: { duration: 0.3, delay: i * 0.05 },
-        };
+  const topThree = Array.isArray(data.topThree) ? data.topThree.slice(0, 3) : [];
 
   return (
     <SectionWrapper
       id="advice"
-      title="下一步行动建议"
+      title="下一步行动计划"
       index={index}
       total={total}
     >
-      {/* 第一组：投递方向 */}
-      {applyDirection.length > 0 && (
-        <motion.div {...fadeIn} className="mb-6">
-          <h3 className="text-[15px] sm:text-[16px] font-semibold text-[var(--navy-950)] mb-3">
-            投递方向
-          </h3>
-          <ol className="space-y-3">
-            {applyDirection.map((item, i) => (
-              <motion.li
+      {topThree.length > 0 && (
+        <div className="space-y-4">
+          {topThree.map((item, i) => {
+            const accent = STEP_ACCENTS[i] ?? STEP_ACCENTS[0];
+
+            const Wrapper = exporting ? "div" : motion.div;
+            const motionProps = exporting
+              ? {}
+              : {
+                  initial: { opacity: 0, y: 10 },
+                  animate: { opacity: 1, y: 0 },
+                  transition: { duration: 0.35, delay: i * 0.08, ease },
+                };
+
+            return (
+              <Wrapper
                 key={i}
-                {...stagger(i)}
-                className="flex gap-3 py-3 px-3 rounded-md bg-[var(--report-soft-bg,transparent)]"
+                {...motionProps}
+                className="rounded-xl border bg-white overflow-hidden break-inside-avoid"
+                style={{ borderColor: accent.border, borderLeftWidth: 4 }}
               >
-                <span className="flex-none inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--primary)] text-white text-[13px] font-semibold tabular-nums">
-                  {i + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                    {item.channel && (
-                      <span className="report-chip">{item.channel}</span>
+                <div className="p-5">
+                  {/* 顶行：序号 + 标题 + 时间 */}
+                  <div className="flex items-start gap-3 mb-3">
+                    <span
+                      className="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-lg text-[13px] font-bold text-white tabular-nums"
+                      style={{ background: accent.num }}
+                    >
+                      {i + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-[15px] font-semibold text-[var(--navy-950)] leading-snug">
+                        {item.title}
+                      </h4>
+                    </div>
+                    {item.deadline && (
+                      <span
+                        className="shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                        style={{ background: accent.bg, color: accent.num }}
+                      >
+                        <Clock className="size-3" />
+                        {item.deadline}
+                      </span>
                     )}
                   </div>
-                  <p className="text-[14px] sm:text-[15px] leading-[1.7] text-[var(--report-ink-soft)]">
-                    {item.tip}
+
+                  {/* 详情 */}
+                  <p className="text-[14px] leading-[1.75] text-[var(--navy-800)] pl-10">
+                    {item.detail}
                   </p>
                 </div>
-              </motion.li>
-            ))}
-          </ol>
-        </motion.div>
+              </Wrapper>
+            );
+          })}
+        </div>
       )}
 
-      {/* 第二组：技能提升 */}
-      {skillUp.length > 0 && (
-        <motion.div {...fadeIn} className="mb-6">
-          <h3 className="text-[15px] sm:text-[16px] font-semibold text-[var(--navy-950)] mb-3">
-            技能提升
-          </h3>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {skillUp.map((item, i) => (
-              <motion.div
-                key={i}
-                {...stagger(i)}
-                className="p-4 rounded-md border border-[var(--report-border)] bg-white"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2 mb-1.5">
-                  <h4 className="text-[14px] sm:text-[15px] font-semibold text-[var(--navy-950)] flex-1 min-w-0">
-                    {item.skill}
-                  </h4>
-                  {item.duration && (
-                    <span className="report-chip flex-none">
-                      {item.duration}
-                    </span>
-                  )}
-                </div>
-                {item.resource && (
-                  <p className="text-[13px] leading-[1.6] text-[var(--report-ink-muted)]">
-                    {item.resource}
-                  </p>
-                )}
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* 第三组：面试要点 */}
-      {interviewTips.length > 0 && (
-        <motion.div {...fadeIn} className="mb-2">
-          <h3 className="text-[15px] sm:text-[16px] font-semibold text-[var(--navy-950)] mb-3">
-            面试要点
-          </h3>
-          <ul className="space-y-2">
-            {interviewTips.map((tip, i) => (
-              <motion.li
-                key={i}
-                {...stagger(i)}
-                className="flex gap-2 py-1 text-[14px] sm:text-[15px] leading-[1.7] text-[var(--report-ink-soft)]"
-              >
-                <span
-                  aria-hidden
-                  className="flex-none mt-[0.55em] h-1.5 w-1.5 rounded-full bg-[var(--primary)]"
-                />
-                <span className="flex-1 min-w-0">{tip}</span>
-              </motion.li>
-            ))}
-          </ul>
-        </motion.div>
-      )}
-
-      {/* 底部固定通用引导（不依赖 data，必须显示） */}
       {PUBLIC_GUIDE}
     </SectionWrapper>
   );
