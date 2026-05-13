@@ -22,19 +22,8 @@ const AUTO_NEXT_DELAY_MS = 400;
 
 const EXPECTED_TOTAL = 8;
 
-const OPTION_LABEL_COLORS: Record<"A" | "B" | "C" | "D", string> = {
-  A: "bg-[var(--blue-100)] text-[var(--blue-600)]",
-  B: "bg-[var(--blue-100)] text-[var(--blue-600)]",
-  C: "bg-[var(--blue-100)] text-[var(--blue-600)]",
-  D: "bg-[var(--blue-100)] text-[var(--blue-600)]",
-};
-
-const OPTION_LABEL_ACTIVE_COLORS: Record<"A" | "B" | "C" | "D", string> = {
-  A: "bg-[var(--blue-500)] text-white",
-  B: "bg-[var(--blue-500)] text-white",
-  C: "bg-[var(--blue-500)] text-white",
-  D: "bg-[var(--blue-500)] text-white",
-};
+const BADGE_INACTIVE = "bg-[var(--blue-100)] text-[var(--blue-600)]";
+const BADGE_ACTIVE   = "bg-[var(--blue-500)] text-white";
 
 interface AnswerMap {
   [questionId: string]: "A" | "B" | "C" | "D";
@@ -330,9 +319,7 @@ export default function QuizPage() {
                       <span
                         className={cn(
                           "shrink-0 size-7 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-150 mt-0.5",
-                          active
-                            ? cn(OPTION_LABEL_ACTIVE_COLORS[label], "scale-[1.1]")
-                            : OPTION_LABEL_COLORS[label],
+                          active ? cn(BADGE_ACTIVE, "scale-[1.1]") : BADGE_INACTIVE,
                         )}
                       >
                         {label}
