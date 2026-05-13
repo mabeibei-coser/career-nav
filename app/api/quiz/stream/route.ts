@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getDeepseekClient } from "@/lib/deepseek";
+import { getDeepseekClient, DEEPSEEK_MODEL } from "@/lib/deepseek";
 import iflytek, { IFLYTEK_MODEL } from "@/lib/iflytek";
 import {
   FALLBACK_QUESTIONS,
@@ -101,7 +101,7 @@ async function streamFromDeepseek(
   try {
     const stream = await client.chat.completions.create(
       {
-        model: "deepseek-chat",
+        model: DEEPSEEK_MODEL,
         messages: [
           { role: "system", content: JSON_CONSTRAINT_PREFIX + buildQuizSystemPrompt() },
           { role: "user", content: buildQuizUserPrompt(formData) },
