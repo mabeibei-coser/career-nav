@@ -162,8 +162,8 @@ export default function IntroPage() {
             </div>
           </motion.div>
 
-          {/* Connector */}
-          <div className="flex justify-start pl-[34px]">
+          {/* Connector — pl 对齐 p-5(20px) + size-11/2(22px) = 42px 徽章中心 */}
+          <div className="flex justify-start pl-[42px]">
             <div className="w-px h-3 bg-[var(--blue-200)]" />
           </div>
 

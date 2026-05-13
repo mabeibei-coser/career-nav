@@ -666,18 +666,13 @@ export default function InterviewPage() {
   // ---------- render ----------
 
   return (
-    <div
-      className="min-h-screen flex flex-col"
-      style={{
-        background: "linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%)",
-      }}
-    >
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-[var(--blue-50)] via-white to-[var(--blue-100)]">
       {/* 顶部导航 + Stepper */}
-      <div className="relative z-10 px-4 sm:px-6 pt-5 pb-3 border-b border-slate-200/60 bg-white/70 backdrop-blur-sm">
+      <div className="relative z-10 px-4 sm:px-6 pt-5 pb-3 border-b border-[var(--blue-100)] bg-white/70 backdrop-blur-sm">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-3">
             <button
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+              className="flex items-center gap-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--navy-800)] transition-colors"
               onClick={() => setSkipConfirm(true)}
             >
               <SkipForward size={13} />
@@ -686,7 +681,7 @@ export default function InterviewPage() {
             {voiceSupported &&
               (phase === "ready" || phase === "text-input") && (
                 <button
-                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                  className="flex items-center gap-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--navy-800)] transition-colors"
                   onClick={
                     phase === "text-input"
                       ? () => setPhaseSync("ready")
@@ -729,7 +724,7 @@ export default function InterviewPage() {
                 exit={{ opacity: 0 }}
                 className="text-center"
               >
-                <p className="text-[15px] text-slate-700 leading-[1.65]">
+                <p className="text-[15px] text-[var(--navy-800)] leading-[1.65]">
                   {GREETING_TEXT}
                 </p>
               </motion.div>
@@ -741,7 +736,7 @@ export default function InterviewPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-sm text-slate-400"
+                className="text-sm text-[var(--muted-foreground)]"
               >
                 AI 思考中...
               </motion.div>
@@ -760,14 +755,7 @@ export default function InterviewPage() {
                   className="w-full"
                 >
                   <div
-                    className="px-5 py-4 rounded-2xl text-[15px] leading-[1.7] text-slate-800"
-                    style={{
-                      background: "rgba(255,255,255,0.85)",
-                      backdropFilter: "blur(8px)",
-                      boxShadow:
-                        "0 1px 2px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04)",
-                      border: "1px solid rgba(255,255,255,0.9)",
-                    }}
+                    className="glass-card px-5 py-4 rounded-2xl text-[15px] leading-[1.7] text-[var(--navy-900)]"
                   >
                     <div className="text-[10px] tracking-[0.2em] text-blue-500 font-semibold uppercase mb-2">
                       第 {currentIndex + 1} / {TOTAL_QUESTIONS} 题
@@ -819,12 +807,7 @@ export default function InterviewPage() {
                   exit={{ opacity: 0 }}
                   onClick={handleStart}
                   onTouchStart={(e) => { e.preventDefault(); handleStart(); }}
-                  className="px-7 py-3 text-white rounded-full text-sm font-medium shadow-lg active:scale-95 transition-all min-h-[44px]"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, #4f8cff 0%, #3b82f6 100%)",
-                    boxShadow: "0 4px 16px rgba(59,130,246,0.35)",
-                  }}
+                  className="px-7 py-3 text-white rounded-full text-sm font-medium active:scale-95 transition-all min-h-[44px] bg-gradient-to-br from-[var(--blue-500)] to-[var(--blue-700)] btn-glow"
                 >
                   开始访谈
                 </motion.button>
