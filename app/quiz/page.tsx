@@ -320,7 +320,7 @@ export default function QuizPage() {
                       aria-pressed={active}
                       aria-label={`选项 ${label}：${option.text}`}
                       className={cn(
-                        "min-h-[56px] w-full flex items-start gap-3 rounded-xl border-2 px-4 py-3.5 text-left transition-all",
+                        "min-h-[56px] w-full flex items-start gap-3 rounded-xl border-2 px-4 py-3.5 text-left transition-all active:scale-[0.98]",
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blue-500)]/40",
                         active
                           ? "border-[var(--blue-500)] bg-[var(--blue-500)]/5 shadow-sm"
@@ -351,12 +351,14 @@ export default function QuizPage() {
 
                       {active && (
                         <motion.span
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
                           transition={{ duration: 0.15, ease: cubicEase }}
-                          className="shrink-0 mt-0.5 text-[var(--blue-500)]"
+                          className="shrink-0 mt-1 text-[var(--blue-500)]"
                         >
-                          ✓
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+                            <path d="M3 8l3.5 3.5L13 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
                         </motion.span>
                       )}
                     </button>
