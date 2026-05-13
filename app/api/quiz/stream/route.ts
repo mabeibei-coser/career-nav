@@ -16,7 +16,9 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const TOTAL_QUESTIONS = 8;
-const STREAM_TIMEOUT_MS = 45_000;
+// astron-code-latest 流式约 15s/题；55s 内约出 3-4 题，剩余用 FALLBACK 顶满
+// maxDuration = 60，留 5s 余量给后处理
+const STREAM_TIMEOUT_MS = 55_000;
 
 export async function POST(req: NextRequest) {
   let formData: JobFormData;
@@ -69,8 +71,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      if (emittedCount === 0) {
-        for (const q of FALLBACK_QUESTIONS) emitQuestion(q);
+      // 无论 AI 生成了多少题，都顶满 TOTAL_QUESTIONS
+      // emittedCount=0 → 全部用 FALLBACK；emittedCount=3 → 补 SJT-04..08
+      if (emittedCount < TOTAL_QUESTIONS) {
+        console.info(`[quiz/stream] 补位 fallback: 已生成 ${emittedCount} 题，补 ${TOTAL_QUESTIONS - emittedCount} 题`);
+        for (const q of FALLBACK_QUESTIONS.slice(emittedCount)) {
+          emitQuestion(q);
+        }
       }
 
       send("[DONE]");
