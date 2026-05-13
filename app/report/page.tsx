@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { EDUCATION_OPTIONS } from "@/lib/form-options";
 import { ReportRenderContext } from "@/components/report/report-context";
 import { OverviewSection } from "@/components/report/overview-section";
 import StrengthSection from "@/components/report/strength-section";
@@ -359,7 +360,7 @@ export default function ReportPage() {
               </Badge>
               {meta.formData.education && (
                 <Badge variant="secondary" className="bg-white text-xs">
-                  {meta.formData.education}
+                  {EDUCATION_OPTIONS.find((o) => o.value === meta.formData.education)?.label ?? meta.formData.education}
                 </Badge>
               )}
               {hasResume && (
