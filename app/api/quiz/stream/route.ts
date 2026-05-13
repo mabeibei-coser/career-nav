@@ -13,12 +13,11 @@ import { stripReasoning, extractJson, tryFixAndParse } from "@/lib/report-shared
 import type { JobFormData, QuizQuestion } from "@/lib/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const TOTAL_QUESTIONS = 8;
-// astron-code-latest 流式约 15s/题；55s 内约出 3-4 题，剩余用 FALLBACK 顶满
-// maxDuration = 60，留 5s 余量给后处理
-const STREAM_TIMEOUT_MS = 55_000;
+// DeepSeek 流式 40s 超时 → 讯飞非流式补齐剩余 → FALLBACK 兜底
+const STREAM_TIMEOUT_MS = 40_000;
 
 export async function POST(req: NextRequest) {
   let formData: JobFormData;
@@ -58,16 +57,22 @@ export async function POST(req: NextRequest) {
         await streamFromDeepseek(formData, emitQuestion);
       } catch (dsErr) {
         const msg = dsErr instanceof Error ? dsErr.message : String(dsErr);
-        console.warn("[quiz/stream] DeepSeek streaming failed:", msg);
+        console.warn(`[quiz/stream] DeepSeek failed after ${emittedCount} questions:`, msg);
+      }
 
-        if (iflytek && emittedCount === 0) {
-          try {
-            const questions = await generateFromIflytek(formData);
-            for (const q of questions) emitQuestion(q);
-          } catch (ifErr) {
-            const ifMsg = ifErr instanceof Error ? ifErr.message : String(ifErr);
-            console.warn("[quiz/stream] iFlytek fallback also failed:", ifMsg);
+      // DeepSeek 没出满 8 题 → 讯飞补齐剩余题目
+      if (iflytek && emittedCount < TOTAL_QUESTIONS) {
+        try {
+          const remaining = TOTAL_QUESTIONS - emittedCount;
+          console.info(`[quiz/stream] 讯飞补位: 还需 ${remaining} 题`);
+          const questions = await generateFromIflytek(formData);
+          // 跳过前 emittedCount 题（避免与已生成的重复），取剩余数量
+          for (const q of questions.slice(emittedCount, TOTAL_QUESTIONS)) {
+            emitQuestion(q);
           }
+        } catch (ifErr) {
+          const ifMsg = ifErr instanceof Error ? ifErr.message : String(ifErr);
+          console.warn("[quiz/stream] iFlytek fallback also failed:", ifMsg);
         }
       }
 
@@ -143,8 +148,8 @@ async function generateFromIflytek(formData: JobFormData): Promise<QuizQuestion[
   if (!iflytek) throw new Error("iFlytek not configured");
 
   const controller = new AbortController();
-  // 降低超时：如果讯飞也挂，快速 fallback 到预置题库，避免用户等 30s
-  const timer = setTimeout(() => controller.abort(), 10_000);
+  // 给讯飞足够时间生成剩余题目（DeepSeek 超时后讯飞是主力补位）
+  const timer = setTimeout(() => controller.abort(), 30_000);
 
   try {
     const response = await iflytek.chat.completions.create(
