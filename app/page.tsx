@@ -170,7 +170,7 @@ export default function HomePage() {
           </div>
 
           <h1
-            className="text-[2rem] sm:text-4xl font-bold text-[var(--navy-900)] mb-3 tracking-tight leading-tight"
+            className="text-[2rem] sm:text-4xl font-bold text-[var(--navy-900)] mb-3 tracking-tight leading-tight text-balance"
             style={{ fontFamily: '"Songti SC", "SimSun", "Noto Serif SC", serif' }}
           >
             智能职业导航
@@ -217,7 +217,7 @@ export default function HomePage() {
                       }
                       aria-pressed={active}
                       className={[
-                        "relative text-left rounded-xl border px-4 py-3 transition-all",
+                        "relative text-left rounded-xl border px-4 py-3 transition-all active:scale-[0.98]",
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blue-500)]/40",
                         "flex items-center justify-between gap-2",
                         active

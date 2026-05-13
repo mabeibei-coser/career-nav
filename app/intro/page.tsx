@@ -116,7 +116,7 @@ export default function IntroPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: cubicEase, delay: 0.2 }}
-          className="text-xl sm:text-2xl font-bold text-[var(--navy-900)] mb-2 tracking-tight text-center px-2"
+          className="text-xl sm:text-2xl font-bold text-[var(--navy-900)] mb-2 tracking-tight text-center px-2 text-balance"
         >
           你好，我是你的 AI 职业助理
         </motion.h1>
@@ -137,7 +137,7 @@ export default function IntroPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: cubicEase, delay: 0.4 }}
-            className="relative rounded-2xl bg-white/55 backdrop-blur-sm border border-white/70 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_6px_24px_rgba(59,130,246,0.07)] overflow-hidden"
+            className="relative rounded-2xl glass-card overflow-hidden"
           >
             <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--blue-300)]/50 to-transparent" />
             <div className="flex items-start gap-4 p-5 sm:p-6">
@@ -172,7 +172,7 @@ export default function IntroPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: cubicEase, delay: 0.52 }}
-            className="relative rounded-2xl bg-white/55 backdrop-blur-sm border border-white/70 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_6px_24px_rgba(59,130,246,0.07)] overflow-hidden"
+            className="relative rounded-2xl glass-card overflow-hidden"
           >
             <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--blue-300)]/50 to-transparent" />
             <div className="flex items-start gap-4 p-5 sm:p-6">
