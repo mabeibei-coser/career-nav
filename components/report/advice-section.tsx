@@ -20,22 +20,6 @@ const STEP_ACCENT = {
   bg: "var(--blue-50)",
 };
 
-const PUBLIC_GUIDE = (
-  <div className="mt-6 p-4 rounded-lg bg-[var(--blue-50)] border border-[var(--blue-200)] text-[13.5px] leading-[1.7] text-[var(--report-ink-soft)]">
-    本评估为参考性质，实际岗位匹配请前往
-    <a
-      href="https://careers.sh.gov.cn"
-      target="_blank"
-      rel="noopener"
-      className="text-[var(--primary)] underline mx-1"
-    >
-      上海市公共招聘网
-    </a>
-    {" / "}
-    拨打 12333 公共就业服务热线
-  </div>
-);
-
 export default function AdviceSection({ data, index, total }: Props) {
   const { exporting } = useReportRender();
 
@@ -50,7 +34,6 @@ export default function AdviceSection({ data, index, total }: Props) {
         <p className="text-[14px] text-[var(--report-ink-muted)]">
           ⏳ 行动计划生成中…
         </p>
-        {PUBLIC_GUIDE}
       </SectionWrapper>
     );
   }
@@ -121,7 +104,6 @@ export default function AdviceSection({ data, index, total }: Props) {
         </div>
       )}
 
-      {PUBLIC_GUIDE}
     </SectionWrapper>
   );
 }

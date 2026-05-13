@@ -76,6 +76,9 @@ C\:*
 /data/*
 !/data/.gitkeep
 !/data/quiz-bank.json
+!/data/pdfs/
+/data/pdfs/*
+!/data/pdfs/.gitkeep
 !/data/reports/
 /data/reports/*
 !/data/reports/.gitkeep

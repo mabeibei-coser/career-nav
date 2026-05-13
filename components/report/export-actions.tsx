@@ -12,10 +12,7 @@ interface ExportActionsProps {
   onNewAnalysis: () => void;
 }
 
-type PdfStatus = "preparing" | "ready" | "downloading" | "error";
-
-const CONTACT_TEXT =
-  "如您有进一步服务需求，可致电 63011095、63137613，或前往黄浦区中山南一路555号线下咨询。";
+type PdfStatus = "generating" | "ready" | "downloading" | "error";
 
 function formatGeneratedAt(dateStr: string): string {
   try {
@@ -33,25 +30,24 @@ function formatGeneratedAt(dateStr: string): string {
 
 export function ExportActions({
   report,
-  onExportingChange,
 }: ExportActionsProps) {
-  const [pdfStatus, setPdfStatus] = React.useState<PdfStatus>("preparing");
-  const [pdfToken, setPdfToken] = React.useState<string | null>(null);
+  const [pdfStatus, setPdfStatus] = React.useState<PdfStatus>("generating");
+  const [pdfId, setPdfId] = React.useState<string | null>(null);
   const [pdfError, setPdfError] = React.useState<string | null>(null);
-  const [prepEpoch, setPrepEpoch] = React.useState(0);
+  const [retryEpoch, setRetryEpoch] = React.useState(0);
   const [showContact, setShowContact] = React.useState(false);
   const cancelledRef = React.useRef(false);
 
-  // mount 时自动 POST /prepare 拿 token（服务端 fire-and-forget 启动 Puppeteer 渲染）
+  // mount 时 POST 生成 PDF → 服务端渲染并存盘 → 返回 pdfId
   React.useEffect(() => {
     cancelledRef.current = false;
-    setPdfStatus("preparing");
+    setPdfStatus("generating");
     setPdfError(null);
 
     (async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/pdf/prepare`,
+          `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/pdf`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -60,17 +56,17 @@ export function ExportActions({
         );
         if (!res.ok) {
           const j = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(j.error || `准备失败 HTTP ${res.status}`);
+          throw new Error(j.error || `生成失败 HTTP ${res.status}`);
         }
-        const { token } = (await res.json()) as { token: string };
+        const { pdfId: id } = (await res.json()) as { pdfId: string };
         if (!cancelledRef.current) {
-          setPdfToken(token);
+          setPdfId(id);
           setPdfStatus("ready");
         }
       } catch (e) {
         if (!cancelledRef.current) {
-          console.error("[export-actions] pdf prepare failed:", e);
-          setPdfError(e instanceof Error ? e.message : "准备下载链接失败");
+          console.error("[export-actions] pdf generate failed:", e);
+          setPdfError(e instanceof Error ? e.message : "PDF 生成失败");
           setPdfStatus("error");
         }
       }
@@ -80,19 +76,19 @@ export function ExportActions({
       cancelledRef.current = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prepEpoch, report]);
+  }, [retryEpoch, report]);
 
   const handleDownload = () => {
     if (pdfStatus === "error") {
-      setPrepEpoch((n) => n + 1);
+      setRetryEpoch((n) => n + 1);
       return;
     }
-    if (pdfStatus !== "ready" || !pdfToken) return;
+    if (pdfStatus !== "ready" || !pdfId) return;
 
     setPdfStatus("downloading");
-    onExportingChange?.(true);
 
-    const url = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/pdf?token=${encodeURIComponent(pdfToken)}`;
+    // 直接从磁盘下载，不再依赖内存 token
+    const url = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/pdf?id=${encodeURIComponent(pdfId)}`;
     const popup = window.open(url, "_blank");
     if (!popup || popup.closed) {
       window.location.href = url;
@@ -101,12 +97,11 @@ export function ExportActions({
     setTimeout(() => {
       if (!cancelledRef.current) {
         setPdfStatus("ready");
-        onExportingChange?.(false);
       }
     }, 1500);
   };
 
-  const downloadDisabled = pdfStatus === "preparing" || pdfStatus === "downloading";
+  const downloadDisabled = pdfStatus === "generating" || pdfStatus === "downloading";
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--blue-100)] bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 print:hidden pb-[env(safe-area-inset-bottom)]">
@@ -164,10 +159,10 @@ export function ExportActions({
             disabled={downloadDisabled}
             className="h-10 sm:h-9 min-h-[44px] sm:min-h-0 bg-[var(--navy-900)] hover:bg-[var(--navy-800)] text-white"
           >
-            {pdfStatus === "preparing" ? (
+            {pdfStatus === "generating" ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
-                <span className="ml-1 hidden sm:inline">准备中…</span>
+                <span className="ml-1 hidden sm:inline">生成中…</span>
               </>
             ) : pdfStatus === "downloading" ? (
               <>
