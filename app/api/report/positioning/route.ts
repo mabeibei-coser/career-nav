@@ -111,7 +111,7 @@ const SYSTEM_PROMPT = `你是黄浦区职业咨询师。基于用户的简历、
 - primary: { position, matchScore (0-100), reasoning (100字以内), industries[2-3], culture, teamRole, coreResponsibilities, coreCompetencies, fitReason }
 - secondary: 同结构，提供差异化路径
 新字段说明：
-  - coreResponsibilities: 3条该岗位的核心职责（每条15字以内）
+  - coreResponsibilities: 5-6条该岗位的核心职责（每条18-22字，写清具体做什么，不要泛泛而谈）
   - coreCompetencies: 4-5项核心能力要求 { name: string, score: number }，score 是该岗位对此能力的要求程度（0-100），结合用户能力评分判断匹配度
   - fitReason: 30-60字，说明为什么该岗位适合这位用户（基于简历+量表结果），支持性语气
 
@@ -138,7 +138,7 @@ const SYSTEM_PROMPT = `你是黄浦区职业咨询师。基于用户的简历、
     "industries": ["string"],
     "culture": "string",
     "teamRole": "string",
-    "coreResponsibilities": ["string", "string", "string"],
+    "coreResponsibilities": ["string", "string", "string", "string", "string"],
     "coreCompetencies": [{ "name": "string", "score": number }],
     "fitReason": "string"
   },

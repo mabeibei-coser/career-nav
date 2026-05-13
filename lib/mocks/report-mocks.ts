@@ -80,7 +80,13 @@ export const MOCK_POSITIONING: Positioning = {
     industries: ["商业银行支行", "保险经代公司", "持牌消费金融"],
     culture: "稳定流程导向 / 重合规 / 师徒带教制",
     teamRole: "执行支持型",
-    coreResponsibilities: ["接待来电/到访客户", "解答产品与业务问题", "维护客户档案与跟进"],
+    coreResponsibilities: [
+      "接听客户来电并记录诉求与处理进度",
+      "解答产品条款、费率及业务办理流程",
+      "跟进未结工单，确保问题闭环解决",
+      "维护客户档案信息并定期更新数据",
+      "配合团队完成月度满意度回访任务",
+    ],
     coreCompetencies: [
       { name: "沟通表达", score: 75 },
       { name: "耐心服务", score: 80 },
@@ -98,7 +104,14 @@ export const MOCK_POSITIONING: Positioning = {
     industries: ["中小型科技公司", "本地民营企业总部", "外资企业上海办公室"],
     culture: "节奏适中 / 服务内部客户为主 / 重视细致与口碑",
     teamRole: "事务支持 + 信息中转",
-    coreResponsibilities: ["协调日常行政事务", "跟进招聘与入职流程", "维护人事档案与数据"],
+    coreResponsibilities: [
+      "统筹办公用品采购与固定资产盘点",
+      "协助发布招聘信息并筛选简历安排面试",
+      "办理新员工入职手续及社保公积金开户",
+      "整理维护人事档案与考勤数据报表",
+      "对接物业与供应商处理日常行政事务",
+      "协助组织内部培训与团建活动安排",
+    ],
     coreCompetencies: [
       { name: "细节把控", score: 75 },
       { name: "多任务协调", score: 65 },

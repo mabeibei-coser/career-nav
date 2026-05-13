@@ -14,11 +14,11 @@ interface Props {
 
 const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
-const STEP_ACCENTS = [
-  { num: "var(--blue-600)", border: "var(--blue-500)", bg: "var(--blue-50)" },
-  { num: "oklch(0.50 0.14 210)", border: "oklch(0.65 0.12 210)", bg: "oklch(0.97 0.03 210)" },
-  { num: "oklch(0.48 0.14 165)", border: "oklch(0.60 0.14 165)", bg: "oklch(0.97 0.03 165)" },
-];
+const STEP_ACCENT = {
+  num: "var(--blue-600)",
+  border: "var(--blue-200)",
+  bg: "var(--blue-50)",
+};
 
 const PUBLIC_GUIDE = (
   <div className="mt-6 p-4 rounded-lg bg-[var(--blue-50)] border border-[var(--blue-200)] text-[13.5px] leading-[1.7] text-[var(--report-ink-soft)]">
@@ -67,7 +67,7 @@ export default function AdviceSection({ data, index, total }: Props) {
       {topThree.length > 0 && (
         <div className="space-y-4">
           {topThree.map((item, i) => {
-            const accent = STEP_ACCENTS[i] ?? STEP_ACCENTS[0];
+            const accent = STEP_ACCENT;
 
             const Wrapper = exporting ? "div" : motion.div;
             const motionProps = exporting
