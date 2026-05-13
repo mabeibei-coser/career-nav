@@ -27,9 +27,9 @@ export function StepIndicator({ currentStep, className, compact }: StepIndicator
               <div
                 className={cn(
                   "w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[11px] sm:text-xs font-semibold transition-all",
-                  active && "bg-blue-500 text-white shadow-md shadow-blue-500/40 ring-2 ring-blue-100",
-                  done && "bg-blue-100 text-blue-600",
-                  !active && !done && "bg-slate-200 text-slate-400"
+                  active && "bg-[var(--blue-500)] text-white shadow-md shadow-[var(--blue-500)]/40 ring-2 ring-[var(--blue-100)]",
+                  done && "bg-[var(--blue-100)] text-[var(--blue-600)]",
+                  !active && !done && "bg-[var(--blue-100)] text-[var(--muted-foreground)]"
                 )}
               >
                 {done ? <Check size={13} strokeWidth={2.5} /> : i + 1}
@@ -37,9 +37,9 @@ export function StepIndicator({ currentStep, className, compact }: StepIndicator
               <span
                 className={cn(
                   "text-xs sm:text-sm font-medium whitespace-nowrap transition-colors",
-                  active && "text-slate-800",
-                  done && "text-slate-500",
-                  !active && !done && "text-slate-400",
+                  active && "text-[var(--navy-900)]",
+                  done && "text-[var(--navy-700)]",
+                  !active && !done && "text-[var(--muted-foreground)]",
                   compact && !active && "hidden sm:inline"
                 )}
               >
@@ -50,7 +50,7 @@ export function StepIndicator({ currentStep, className, compact }: StepIndicator
               <div
                 className={cn(
                   "flex-1 h-px transition-colors",
-                  done ? "bg-blue-300" : "bg-slate-200"
+                  done ? "bg-[var(--blue-300)]" : "bg-[var(--blue-100)]"
                 )}
               />
             )}

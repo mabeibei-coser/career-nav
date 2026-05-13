@@ -130,80 +130,87 @@ export default function IntroPage() {
           接下来我们一起完成两个环节
         </motion.p>
 
-        {/* Journey flow — single container, timeline layout */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: cubicEase, delay: 0.4 }}
-          className="w-full max-w-md mb-auto"
-        >
-          <div className="relative rounded-2xl bg-white/50 backdrop-blur-sm border border-white/70 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_8px_32px_rgba(59,130,246,0.06)] overflow-hidden">
-            {/* Top accent line */}
-            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--blue-300)]/60 to-transparent" />
-
-            <div className="relative p-5 sm:p-6">
-              {/* Step 1 */}
-              <motion.div
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, ease: cubicEase, delay: 0.5 }}
-                className="flex gap-3.5 relative mb-7"
-              >
-                <div className="shrink-0 relative z-10">
-                  <ListChecks className="size-5 text-[var(--blue-500)]" strokeWidth={1.8} />
-                </div>
-                <div className="pt-px min-w-0">
-                  <span className="inline-block text-[10px] font-mono font-semibold text-[var(--blue-400)]/80 tracking-[0.16em] uppercase mb-1">
-                    Step 01
-                  </span>
-                  <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)] leading-snug">
+        {/* Journey flow — two distinct info cards */}
+        <div className="w-full max-w-md mb-auto space-y-0">
+          {/* Step 1 card */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: cubicEase, delay: 0.4 }}
+            className="relative rounded-2xl bg-white/55 backdrop-blur-sm border border-white/70 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_6px_24px_rgba(59,130,246,0.07)] overflow-hidden"
+          >
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--blue-300)]/50 to-transparent" />
+            <div className="flex items-start gap-4 p-5 sm:p-6">
+              {/* Number badge */}
+              <div className="shrink-0 size-11 rounded-2xl bg-[var(--blue-500)] text-white flex items-center justify-center text-base font-bold shadow-[0_4px_12px_var(--blue-500)/30]">
+                01
+              </div>
+              <div className="flex-1 min-w-0 pt-0.5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)]">
                     职业导航自测
                   </h3>
-                </div>
-              </motion.div>
-
-              {/* Step 2 */}
-              <motion.div
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, ease: cubicEase, delay: 0.6 }}
-                className="flex gap-3.5 relative"
-              >
-                <div className="shrink-0 relative z-10">
-                  <Mic className="size-5 text-[var(--blue-500)]" strokeWidth={1.8} />
-                </div>
-                <div className="pt-px min-w-0">
-                  <span className="inline-block text-[10px] font-mono font-semibold text-[var(--blue-400)]/80 tracking-[0.16em] uppercase mb-1">
-                    Step 02
+                  <span className="text-[10px] font-medium text-[var(--blue-600)] bg-[var(--blue-100)] px-2 py-0.5 rounded-full whitespace-nowrap">
+                    约 3-5 分钟
                   </span>
-                  <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)] leading-snug">
+                </div>
+                <p className="text-xs text-[var(--muted-foreground)] leading-relaxed">
+                  8 道情境判断题，评估你的职业偏好与工作风格
+                </p>
+              </div>
+              <ListChecks className="shrink-0 size-[18px] text-[var(--blue-300)] mt-1" strokeWidth={1.8} />
+            </div>
+          </motion.div>
+
+          {/* Connector */}
+          <div className="flex justify-start pl-[34px]">
+            <div className="w-px h-3 bg-[var(--blue-200)]" />
+          </div>
+
+          {/* Step 2 card */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: cubicEase, delay: 0.52 }}
+            className="relative rounded-2xl bg-white/55 backdrop-blur-sm border border-white/70 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_6px_24px_rgba(59,130,246,0.07)] overflow-hidden"
+          >
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--blue-300)]/50 to-transparent" />
+            <div className="flex items-start gap-4 p-5 sm:p-6">
+              <div className="shrink-0 size-11 rounded-2xl bg-[var(--blue-500)] text-white flex items-center justify-center text-base font-bold shadow-[0_4px_12px_var(--blue-500)/30]">
+                02
+              </div>
+              <div className="flex-1 min-w-0 pt-0.5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)]">
                     AI 语音访谈
                   </h3>
+                  <span className="text-[10px] font-medium text-[var(--blue-600)] bg-[var(--blue-100)] px-2 py-0.5 rounded-full whitespace-nowrap">
+                    约 5-8 分钟
+                  </span>
                 </div>
-              </motion.div>
+                <p className="text-xs text-[var(--muted-foreground)] leading-relaxed">
+                  4 道语音问答，AI 深入了解你的职业经历与求职意向
+                </p>
+              </div>
+              <Mic className="shrink-0 size-[18px] text-[var(--blue-300)] mt-1" strokeWidth={1.8} />
             </div>
+          </motion.div>
 
-            {/* Outcome footer */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.7 }}
-              className="px-5 sm:px-6 py-3 bg-[var(--blue-50)]/40 border-t border-[var(--blue-100)]/40 flex items-center justify-center gap-2"
-            >
-              <svg className="size-3.5 text-[var(--blue-400)]" viewBox="0 0 16 16" fill="none" aria-hidden>
-                <path
-                  d="M2 14h12M4 10h8M6 6h4M7.5 2h1"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span className="text-xs text-[var(--muted-foreground)]">
-                完成后将为您生成个性化职业导航报告
-              </span>
-            </motion.div>
-          </div>
-        </motion.div>
+          {/* Outcome note */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.65 }}
+            className="flex items-center justify-center gap-1.5 pt-3"
+          >
+            <svg className="size-3 text-[var(--blue-400)] shrink-0" viewBox="0 0 16 16" fill="none" aria-hidden>
+              <path d="M2 14h12M4 10h8M6 6h4M7.5 2h1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <span className="text-[11px] text-[var(--muted-foreground)]">
+              完成后将为您生成个性化职业导航报告
+            </span>
+          </motion.div>
+        </div>
 
         {/* CTA */}
         <motion.div
