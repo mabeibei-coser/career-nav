@@ -14,20 +14,6 @@ interface ExportActionsProps {
 
 type PdfStatus = "generating" | "ready" | "downloading" | "error";
 
-function formatGeneratedAt(dateStr: string): string {
-  try {
-    const d = new Date(dateStr);
-    const y = d.getFullYear();
-    const m = d.getMonth() + 1;
-    const day = d.getDate();
-    const h = String(d.getHours()).padStart(2, "0");
-    const min = String(d.getMinutes()).padStart(2, "0");
-    return `${y}年${m}月${day}日 ${h}:${min}`;
-  } catch {
-    return dateStr;
-  }
-}
-
 export function ExportActions({
   report,
 }: ExportActionsProps) {
@@ -134,54 +120,49 @@ export function ExportActions({
         </div>
       )}
 
-      <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
-        <div className="min-w-0 flex-1 text-xs text-[var(--muted-foreground)] truncate">
-          生成时间：{formatGeneratedAt(report.meta.generatedAt)}
-        </div>
-        <div className="flex items-center gap-2">
-          {/* 预约服务 */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-10 sm:h-9 min-h-[44px] sm:min-h-0"
-            onClick={() => setShowContact((v) => !v)}
-          >
-            <Phone className="size-4" />
-            <span className="ml-1">预约服务</span>
-          </Button>
+      <div className="max-w-5xl mx-auto flex items-center gap-3 px-4 py-3 sm:px-6">
+        {/* 预约服务 */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 h-11 min-h-[44px] text-[15px]"
+          onClick={() => setShowContact((v) => !v)}
+        >
+          <Phone className="size-4" />
+          <span className="ml-1.5">预约线下服务</span>
+        </Button>
 
-          {/* 下载 PDF */}
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleDownload}
-            disabled={downloadDisabled}
-            className="h-10 sm:h-9 min-h-[44px] sm:min-h-0 bg-[var(--navy-900)] hover:bg-[var(--navy-800)] text-white"
-          >
-            {pdfStatus === "generating" ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                <span className="ml-1 hidden sm:inline">生成中…</span>
-              </>
-            ) : pdfStatus === "downloading" ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                <span className="ml-1 hidden sm:inline">下载中…</span>
-              </>
-            ) : pdfStatus === "error" ? (
-              <>
-                <RotateCw className="size-4" />
-                <span className="ml-1">重试</span>
-              </>
-            ) : (
-              <>
-                <Download className="size-4" />
-                <span className="ml-1">下载 PDF</span>
-              </>
-            )}
-          </Button>
-        </div>
+        {/* 下载 PDF */}
+        <Button
+          type="button"
+          size="sm"
+          onClick={handleDownload}
+          disabled={downloadDisabled}
+          className="flex-1 h-11 min-h-[44px] text-[15px] bg-[var(--navy-900)] hover:bg-[var(--navy-800)] text-white"
+        >
+          {pdfStatus === "generating" ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              <span className="ml-1.5">PDF 生成中…</span>
+            </>
+          ) : pdfStatus === "downloading" ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              <span className="ml-1.5">下载中…</span>
+            </>
+          ) : pdfStatus === "error" ? (
+            <>
+              <RotateCw className="size-4" />
+              <span className="ml-1.5">重试下载</span>
+            </>
+          ) : (
+            <>
+              <Download className="size-4" />
+              <span className="ml-1.5">下载 PDF 报告</span>
+            </>
+          )}
+        </Button>
       </div>
       {pdfStatus === "error" && pdfError && (
         <div className="max-w-5xl mx-auto px-4 pb-2 sm:px-6">

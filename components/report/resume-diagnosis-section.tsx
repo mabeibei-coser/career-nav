@@ -9,10 +9,9 @@ import type { ResumeDiagnosis } from "@/lib/types";
 interface Props {
   data: ResumeDiagnosis | null | undefined;
   hasResume?: boolean;
+  index?: number;
+  total?: number;
 }
-
-const SECTION_INDEX = 4;
-const SECTION_TOTAL = 5;
 
 // 优先级 → tone（low 走 .report-chip 默认中性蓝灰，不设 data-tone）
 const PRIORITY_TONE: Record<"high" | "medium" | "low", "danger" | "warning" | undefined> = {
@@ -45,7 +44,7 @@ const stagger = {
   show: { transition: { staggerChildren: 0.05 } },
 };
 
-export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
+export default function ResumeDiagnosisSection({ data, hasResume, index = 4, total = 5 }: Props) {
   const { exporting } = useReportRender();
 
   // 兜底状态：未上传简历
@@ -54,8 +53,8 @@ export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
       <SectionWrapper
         id="resume-diagnosis"
         title="简历快诊"
-        index={SECTION_INDEX}
-        total={SECTION_TOTAL}
+        index={index}
+        total={total}
       >
         <div
           data-pdf-section="resume-diagnosis"
@@ -83,8 +82,8 @@ export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
       <SectionWrapper
         id="resume-diagnosis"
         title="简历快诊"
-        index={SECTION_INDEX}
-        total={SECTION_TOTAL}
+        index={index}
+        total={total}
       >
         <div
           data-pdf-section="resume-diagnosis"
@@ -108,6 +107,7 @@ export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
   const scoreColor = getScoreColor(score);
 
   const issues = Array.isArray(data.issues) ? data.issues : [];
+  const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
 
   // SVG 圆环参数
   const ringSize = 92;
@@ -127,8 +127,8 @@ export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
     <SectionWrapper
       id="resume-diagnosis"
       title="简历快诊"
-      index={SECTION_INDEX}
-      total={SECTION_TOTAL}
+      index={index}
+      total={total}
       meta={
         <span>{issues.length} 条可补充</span>
       }
@@ -213,9 +213,9 @@ export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
         {/* 中部：问题清单（issues） */}
         {issues.length > 0 && (
           <div className="mb-5">
-            <h3 className="text-sm font-semibold text-[var(--navy-900)] mb-3">
+            <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-3">
               可以补充的内容
-            </h3>
+            </div>
             <Container className="space-y-3" {...containerProps}>
               {issues.map((issue, i) => {
                 const title = issue?.title?.trim() || "（待补充）";
@@ -237,7 +237,7 @@ export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
                     {...itemProps}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
-                      <h4 className="text-[14.5px] font-semibold text-[var(--navy-900)] flex-1 min-w-0">
+                      <h4 className="text-[15px] font-semibold text-[var(--navy-900)] flex-1 min-w-0">
                         {title}
                       </h4>
                       <span
@@ -265,8 +265,40 @@ export default function ResumeDiagnosisSection({ data, hasResume }: Props) {
           </div>
         )}
 
+        {/* 优化建议 */}
+        {suggestions.length > 0 && (
+          <div>
+            <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-3">
+              优化建议
+            </div>
+            <Container className="space-y-3" {...containerProps}>
+              {suggestions.map((sug, i) => (
+                <Item
+                  key={i}
+                  className="rounded-xl border border-[var(--blue-100)] bg-[var(--blue-50)]/40 p-4 break-inside-avoid"
+                  {...itemProps}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--blue-500)] text-[11px] font-bold text-white tabular-nums">
+                      {i + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-[15px] font-semibold text-[var(--navy-900)] mb-1.5">
+                        {sug.title}
+                      </h4>
+                      <p className="text-[13.5px] leading-[1.75] text-[var(--navy-800)]">
+                        {sug.detail}
+                      </p>
+                    </div>
+                  </div>
+                </Item>
+              ))}
+            </Container>
+          </div>
+        )}
+
         {/* 两端皆空时的兜底 */}
-        {issues.length === 0 && (
+        {issues.length === 0 && suggestions.length === 0 && (
           <p className="text-[13.5px] text-[var(--report-ink-soft)]">
             暂无具体反馈条目。
           </p>

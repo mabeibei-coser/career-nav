@@ -160,7 +160,7 @@ export interface PositionRecommendation {
   industries: string[];
   culture: string;
   teamRole: string;
-  coreResponsibilities?: string[];                              // 核心职责（3 条，每条 ≤15 字）
+  coreResponsibilities?: string[];                              // 核心职责（5 条，每条 10-15 字）
   coreCompetencies?: { name: string; score: number }[];       // 核心能力要求（4-5 项，score 0-100）
   fitReason?: string;                                          // 为什么适合你（30-60 字）
 }

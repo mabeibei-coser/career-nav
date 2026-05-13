@@ -314,7 +314,29 @@ export default function ReportPage() {
     );
   }
 
-  const dateLabel = new Date(meta.generatedAt).toLocaleDateString("zh-CN");
+  // 从简历文本提取姓名（常见中文简历格式：开头 2-4 字中文名 / "姓名：XXX"）
+  const extractedName = (() => {
+    const txt = meta.formData.resumeText;
+    if (!txt) return "";
+    // 1) "姓名" 标签后的名字
+    const labelMatch = txt.match(/姓\s*名[\s:：]+([^\s,，\n]{2,4})/);
+    if (labelMatch) return labelMatch[1];
+    // 2) 首行只有 2-4 个中文字（大概率是名字）
+    const firstLine = txt.split(/[\n\r]/)[0]?.trim() ?? "";
+    if (/^[一-鿿]{2,4}$/.test(firstLine)) return firstLine;
+    return "";
+  })();
+  const displayName = extractedName || meta.formData.targetPosition;
+
+  const dateLabel = (() => {
+    const d = new Date(meta.generatedAt);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    const h = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${y}年${m}月${day}日 ${h}:${min}`;
+  })();
   const position = meta.formData.targetPosition;
   const hasResume = meta.hasResume;
   const identityLabel =
@@ -373,7 +395,7 @@ export default function ReportPage() {
               )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-[var(--navy-950)] tracking-tight mb-2">
-              {position} · 职业导航报告
+              {displayName} · 职业导航报告
             </h1>
             <p className="text-xs sm:text-sm text-[var(--report-ink-muted)]">
               生成于 {dateLabel} · 共 5 个模块
@@ -408,6 +430,8 @@ export default function ReportPage() {
             <ResumeDiagnosisSection
               data={sections.resumeDiagnosis.data}
               hasResume={hasResume}
+              index={4}
+              total={5}
             />
 
             {/* ⑤ 行动建议 */}

@@ -91,11 +91,16 @@ function PositionCard({
         </h3>
       </div>
 
-      {/* 推荐理由 */}
+      {/* 岗位综述 */}
       {rec.reasoning && (
-        <p className="text-[13.5px] leading-[1.7] text-[var(--navy-800)] mb-5">
-          {rec.reasoning}
-        </p>
+        <div className="mb-5">
+          <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--report-ink-muted)] mb-1.5">
+            岗位综述
+          </div>
+          <p className="text-[13.5px] leading-[1.7] text-[var(--navy-800)]">
+            {rec.reasoning}
+          </p>
+        </div>
       )}
 
       {/* 核心职责 + 核心能力 */}
@@ -171,13 +176,18 @@ function PositionCard({
         </div>
       )}
 
-      {/* 为什么适合你 */}
+      {/* 为什么适合你（报告亮点） */}
       {rec.fitReason && (
-        <div className="mt-5 rounded-lg border-l-4 border-[var(--blue-500)] bg-[var(--blue-50)]/60 px-4 py-3">
-          <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--blue-700)] mb-1.5">
-            为什么适合你
+        <div className="mt-5 rounded-xl border border-[var(--blue-200)] bg-gradient-to-br from-[var(--blue-50)] to-white p-4 sm:p-5">
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <svg className="size-4 text-[var(--blue-500)]" viewBox="0 0 16 16" fill="none" aria-hidden>
+              <path d="M8 1l2.35 4.76L16 6.54l-4 3.9.94 5.5L8 13.27l-4.94 2.67.94-5.5-4-3.9 5.65-.78L8 1z" fill="currentColor" />
+            </svg>
+            <span className="text-[13px] font-bold text-[var(--blue-700)]">
+              为什么适合你
+            </span>
           </div>
-          <p className="text-[13.5px] leading-[1.7] text-[var(--navy-800)]">
+          <p className="text-[13.5px] leading-[1.85] text-[var(--navy-800)]">
             {rec.fitReason}
           </p>
         </div>

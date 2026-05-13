@@ -31,9 +31,9 @@ export default function AdviceSection({ data, index, total }: Props) {
         index={index}
         total={total}
       >
-        <p className="text-[14px] text-[var(--report-ink-muted)]">
+        <div className="rounded-xl border border-dashed border-[var(--blue-200)] bg-[var(--blue-50)]/40 px-5 py-8 text-center text-[13.5px] text-[var(--report-ink-muted)]">
           ⏳ 行动计划生成中…
-        </p>
+        </div>
       </SectionWrapper>
     );
   }
@@ -94,7 +94,7 @@ export default function AdviceSection({ data, index, total }: Props) {
                   </div>
 
                   {/* 详情 */}
-                  <p className="text-[14px] leading-[1.75] text-[var(--navy-800)] pl-10">
+                  <p className="text-[13.5px] leading-[1.75] text-[var(--navy-800)] pl-10">
                     {item.detail}
                   </p>
                 </div>
