@@ -130,71 +130,55 @@ export default function IntroPage() {
           接下来我们一起完成两个环节
         </motion.p>
 
-        {/* Journey flow — two distinct info cards */}
-        <div className="w-full max-w-md mb-auto space-y-0">
-          {/* Step 1 card */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: cubicEase, delay: 0.4 }}
-            className="relative rounded-2xl glass-card overflow-hidden"
-          >
+        {/* Journey flow — unified timeline card */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: cubicEase, delay: 0.4 }}
+          className="w-full max-w-md mb-auto"
+        >
+          <div className="relative rounded-2xl glass-card overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--blue-300)]/50 to-transparent" />
-            <div className="flex items-start gap-4 p-5 sm:p-6">
-              {/* Number badge */}
-              <div className="shrink-0 size-11 rounded-2xl bg-[var(--blue-500)] text-white flex items-center justify-center text-base font-bold shadow-[0_4px_12px_var(--blue-500)/30]">
+
+            {/* Step 1 */}
+            <div className="flex items-start gap-4 px-5 pt-5 sm:px-6 sm:pt-6">
+              <div className="shrink-0 size-11 rounded-2xl bg-[var(--blue-500)] text-white flex items-center justify-center text-base font-bold">
                 01
               </div>
               <div className="flex-1 min-w-0 pt-0.5">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)]">
-                    职业导航自测
-                  </h3>
-                  <span className="text-[10px] font-medium text-[var(--blue-600)] bg-[var(--blue-100)] px-2 py-0.5 rounded-full whitespace-nowrap">
-                    约 3-5 分钟
-                  </span>
-                </div>
+                <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)] mb-1">
+                  职业导航自测
+                </h3>
                 <p className="text-xs text-[var(--muted-foreground)] leading-relaxed">
                   8 道情境判断题，评估你的职业偏好与工作风格
                 </p>
               </div>
               <ListChecks className="shrink-0 size-[18px] text-[var(--blue-300)] mt-1" strokeWidth={1.8} />
             </div>
-          </motion.div>
 
-          {/* Connector — pl 对齐 p-5(20px) + size-11/2(22px) = 42px 徽章中心 */}
-          <div className="flex justify-start pl-[42px]">
-            <div className="w-px h-3 bg-[var(--blue-200)]" />
-          </div>
+            {/* Timeline connector — w-11 匹配徽章宽度，line 自动居中 */}
+            <div className="flex px-5 sm:px-6">
+              <div className="w-11 flex justify-center">
+                <div className="w-px h-5 bg-[var(--blue-200)]" />
+              </div>
+            </div>
 
-          {/* Step 2 card */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: cubicEase, delay: 0.52 }}
-            className="relative rounded-2xl glass-card overflow-hidden"
-          >
-            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--blue-300)]/50 to-transparent" />
-            <div className="flex items-start gap-4 p-5 sm:p-6">
-              <div className="shrink-0 size-11 rounded-2xl bg-[var(--blue-500)] text-white flex items-center justify-center text-base font-bold shadow-[0_4px_12px_var(--blue-500)/30]">
+            {/* Step 2 */}
+            <div className="flex items-start gap-4 px-5 pb-5 sm:px-6 sm:pb-6">
+              <div className="shrink-0 size-11 rounded-2xl bg-[var(--blue-500)] text-white flex items-center justify-center text-base font-bold">
                 02
               </div>
               <div className="flex-1 min-w-0 pt-0.5">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)]">
-                    AI 语音访谈
-                  </h3>
-                  <span className="text-[10px] font-medium text-[var(--blue-600)] bg-[var(--blue-100)] px-2 py-0.5 rounded-full whitespace-nowrap">
-                    约 5-8 分钟
-                  </span>
-                </div>
+                <h3 className="text-[15px] sm:text-base font-semibold text-[var(--navy-900)] mb-1">
+                  AI 语音访谈
+                </h3>
                 <p className="text-xs text-[var(--muted-foreground)] leading-relaxed">
                   4 道语音问答，AI 深入了解你的职业经历与求职意向
                 </p>
               </div>
               <Mic className="shrink-0 size-[18px] text-[var(--blue-300)] mt-1" strokeWidth={1.8} />
             </div>
-          </motion.div>
+          </div>
 
           {/* Outcome note */}
           <motion.div
@@ -210,7 +194,7 @@ export default function IntroPage() {
               完成后将为您生成个性化职业导航报告
             </span>
           </motion.div>
-        </div>
+        </motion.div>
 
         {/* CTA */}
         <motion.div
