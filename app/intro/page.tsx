@@ -34,8 +34,14 @@ export default function IntroPage() {
   }, [isSpeaking]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowButton(true), 5000);
-    return () => clearTimeout(timer);
+    // 5s 兜底：仅在 TTS 完全没播放时触发（网络慢/TTS 接口挂）
+    // TTS 已开始播放（wasSpeakingRef=true）则不触发，等播放结束
+    const shortTimer = setTimeout(() => {
+      if (!wasSpeakingRef.current) setShowButton(true);
+    }, 5000);
+    // 终极兜底：20s 后无论如何都显示
+    const longTimer = setTimeout(() => setShowButton(true), 20000);
+    return () => { clearTimeout(shortTimer); clearTimeout(longTimer); };
   }, []);
 
   useEffect(() => {
