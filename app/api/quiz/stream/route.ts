@@ -6,10 +6,8 @@ import {
   JSON_CONSTRAINT_PREFIX,
   buildQuizSystemPrompt,
   buildQuizUserPrompt,
-  normalizeQuestion,
   ProgressiveQuestionParser,
 } from "@/lib/quiz-stream";
-import { stripReasoning, extractJson, tryFixAndParse } from "@/lib/report-shared";
 import type { JobFormData, QuizQuestion } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -50,8 +48,10 @@ export async function POST(req: NextRequest) {
       let emittedCount = 0;
 
       const emitQuestion = (q: QuizQuestion) => {
-        send(JSON.stringify({ type: "question", question: q }));
         emittedCount++;
+        // 统一重编号：主模型 / 讯飞补位 / 静态兜底的题按 emit 顺序连续编号，id 不冲突
+        const renumbered = { ...q, id: `SJT-${String(emittedCount).padStart(2, "0")}` };
+        send(JSON.stringify({ type: "question", question: renumbered }));
       };
 
       // 第一轮：讯飞 Coding（主模型）流式生成
@@ -62,16 +62,13 @@ export async function POST(req: NextRequest) {
         console.warn(`[quiz/stream] 主模型流式超时/失败，已出 ${emittedCount} 题:`, msg);
       }
 
-      // 第二轮：主模型没出满 → 讯飞通用模型（兜底）非流式补齐
+      // 第二轮：主模型没出满 → 讯飞通用模型（兜底）流式补缺口
       if (iflytek && emittedCount < TOTAL_QUESTIONS) {
         try {
           const remaining = TOTAL_QUESTIONS - emittedCount;
           console.info(`[quiz/stream] 讯飞通用模型补位: 还需 ${remaining} 题`);
-          const questions = await generateFromFallbackLLM(formData);
-          // 跳过前 emittedCount 题（避免与已生成的重复），取剩余数量
-          for (const q of questions.slice(emittedCount, TOTAL_QUESTIONS)) {
-            emitQuestion(q);
-          }
+          await streamFillRemaining(formData, remaining, emitQuestion);
+          console.info(`[quiz/stream] 讯飞补位后已出 ${emittedCount} 题`);
         } catch (ifErr) {
           const ifMsg = ifErr instanceof Error ? ifErr.message : String(ifErr);
           console.warn("[quiz/stream] 讯飞通用模型也失败:", ifMsg);
@@ -150,41 +147,45 @@ async function streamFromPrimary(
 }
 
 /**
- * 讯飞通用模型（兜底）非流式生成。
- * 主模型超时后调用，补齐剩余题目。
+ * 讯飞通用模型（兜底）流式补缺口。
+ * 主模型超时后调用，**只生成 needCount 道**（输出短 → 快、JSON 更不易崩、不会被 token 截断），
+ * 复用 ProgressiveQuestionParser 的逐题解析 + 容错（label 不匹配按位置兜底 + emit 守卫）。
  */
-async function generateFromFallbackLLM(formData: JobFormData): Promise<QuizQuestion[]> {
+async function streamFillRemaining(
+  formData: JobFormData,
+  needCount: number,
+  emitQuestion: (q: QuizQuestion) => void,
+): Promise<void> {
   if (!iflytek) throw new Error("讯飞通用模型未配置");
 
+  const parser = new ProgressiveQuestionParser();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 45_000);
 
   try {
-    const response = await iflytek.chat.completions.create(
+    const stream = await iflytek.chat.completions.create(
       {
         model: IFLYTEK_MODEL,
         messages: [
-          { role: "system", content: JSON_CONSTRAINT_PREFIX + buildQuizSystemPrompt() },
-          { role: "user", content: buildQuizUserPrompt(formData) },
+          { role: "system", content: JSON_CONSTRAINT_PREFIX + buildQuizSystemPrompt(needCount) },
+          { role: "user", content: buildQuizUserPrompt(formData, needCount) },
         ],
         temperature: 0.7,
         max_tokens: 4000,
+        stream: true,
       },
       { signal: controller.signal },
     );
 
-    const rawContent = response.choices[0]?.message?.content || "";
-    const cleaned = stripReasoning(rawContent);
-    const jsonStr = extractJson(cleaned);
-    const data = tryFixAndParse(jsonStr) as { questions?: { text: string; options: { label: string; text: string; primary?: string; secondary?: string }[] }[] };
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (!delta) continue;
 
-    if (!data?.questions || !Array.isArray(data.questions)) {
-      throw new Error("讯飞通用模型返回格式异常");
+      const newQuestions = parser.push(delta);
+      for (const q of newQuestions) emitQuestion(q);
+
+      if (parser.getEmittedCount() >= needCount) break;
     }
-
-    return data.questions
-      .slice(0, TOTAL_QUESTIONS)
-      .map((q, i) => normalizeQuestion(q, i));
   } finally {
     clearTimeout(timer);
   }

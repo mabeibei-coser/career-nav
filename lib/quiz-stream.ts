@@ -198,10 +198,11 @@ export const JSON_CONSTRAINT_PREFIX = `【输出约束 · 必须严格遵守】
 以下是具体要求：
 `;
 
-export function buildQuizSystemPrompt(): string {
+export function buildQuizSystemPrompt(count = 8): string {
   // 精简版：三段场景池移到 user message（只给当前身份对应的那段），
   // system prompt 短 → LLM 处理快、输出更稳、吃前缀缓存
-  return `你是职业测评专家。根据求职者背景生成 8 道情境判断题（SJT）。
+  // count 参数化：主模型生成 8 题；讯飞兜底只生成缺口数（输出短 → 快、JSON 更稳）
+  return `你是职业测评专家。根据求职者背景生成 ${count} 道情境判断题（SJT）。
 **面向群体多为正在求职、过往可能断续就业的人员，不全是精英职场背景**。
 
 【去精英化原则】
@@ -210,18 +211,18 @@ export function buildQuizSystemPrompt(): string {
 - 按 user message 的【场景池】指引取材，严格遵守
 
 【输出格式】
-{"questions":[{"text":"情境40-80字","options":[{"label":"A","text":"行为20-45字","primary":"ability_key","secondary":"ability_key"},{"label":"B","text":"...","primary":"..."},{"label":"C","text":"...","primary":"..."},{"label":"D","text":"...","primary":"..."}]}, 共8题]}
+{"questions":[{"text":"情境40-80字","options":[{"label":"A","text":"行为20-45字","primary":"ability_key","secondary":"ability_key"},{"label":"B","text":"...","primary":"..."},{"label":"C","text":"...","primary":"..."},{"label":"D","text":"...","primary":"..."}]}, 共${count}题]}
 - primary / secondary 只能从 6 维选：communication / collaboration / execution / learning / data / stress
 - secondary 可不填；如填必须 ≠ 同选项 primary
 
 【约束】
-- 8 题的 primary 合计覆盖全部 6 个维度；每题 4 选项维度区分清晰
+- ${count} 题的 primary 尽量覆盖更多能力维度；每题 4 选项维度区分清晰
 - 每题 4 选项都是合理选择，无明显"正确答案"
 - 措辞温和，不带审判 / 焦虑 / 紧迫感；不出现 MBTI / 大五 / 霍兰德、不出现"危机/必须/赶紧/否则"
 - **每个字符串值必须写成一行，内部不得出现换行符、制表符**`;
 }
 
-export function buildQuizUserPrompt(formData: JobFormData): string {
+export function buildQuizUserPrompt(formData: JobFormData, count = 8): string {
   const identityLabel =
     formData.identity === "recent_grad"
       ? "应届毕业生"
@@ -261,7 +262,7 @@ export function buildQuizUserPrompt(formData: JobFormData): string {
   }
 
   lines.push("");
-  lines.push("请生成 8 道高度个性化的情境判断题，输出合法 JSON。");
+  lines.push(`请生成 ${count} 道高度个性化的情境判断题，输出合法 JSON。`);
 
   return lines.join("\n");
 }
