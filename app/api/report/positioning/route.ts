@@ -77,28 +77,56 @@ function validatePositioning(d: Positioning): string | null {
   return null;
 }
 
-function normalizePositioning(d: Positioning): Positioning {
-  // matchScore clamp [0,100]，industries 去空白避免 [" ", "..."] 漏网
-  // 新字段直接透传（coreResponsibilities / coreCompetencies / fitReason），...spread 已包含
-  const normalizeRec = (rec: PositionRecommendation): PositionRecommendation => ({
-    ...rec,
-    matchScore: clampScore(rec.matchScore),
-    industries: (rec.industries ?? [])
-      .map((s) => String(s).trim())
-      .filter((s) => s.length > 0),
-    coreResponsibilities: Array.isArray(rec.coreResponsibilities)
-      ? rec.coreResponsibilities.map((r) => String(r).trim()).filter(Boolean)
-      : undefined,
-    coreCompetencies: Array.isArray(rec.coreCompetencies)
+function normalizePositioning(d: Positioning, scoring: ScoringResult): Positioning {
+  // 用户能力评分查找表：能力名 → 量表真实分（全报告唯一真相）
+  // coreCompetencies 雷达图的 score 一律用这个覆写，不用 LLM 编的 ——
+  // 保证同一能力在两个岗位、以及和 overview/strength 雷达图里落点一致。
+  const abilityScoreMap = new Map(
+    scoring.ability.map((a) => [a.name, a.score] as const)
+  );
+
+  const normalizeRec = (rec: PositionRecommendation): PositionRecommendation => {
+    // coreCompetencies：LLM 只负责「选哪 5 个维度」（体现岗位差异），
+    // score 强制用量表真实分。LLM 编的维度名只保留能映射到 6 维的。
+    const rawComps = Array.isArray(rec.coreCompetencies)
       ? rec.coreCompetencies
-          .filter((c) => c && typeof c === "object" && typeof c.name === "string")
-          .map((c) => ({ name: String(c.name).trim(), score: clampScore(c.score) }))
-      : undefined,
-    fitReason:
-      typeof rec.fitReason === "string" && rec.fitReason.trim().length > 0
-        ? rec.fitReason.trim()
+      : [];
+    const pickedNames = rawComps
+      .filter((c) => c && typeof c === "object" && typeof c.name === "string")
+      .map((c) => String(c.name).trim())
+      .filter((name) => abilityScoreMap.has(name));
+    const uniqueNames = [...new Set(pickedNames)];
+    const comps: { name: string; score: number }[] = uniqueNames.map(
+      (name) => ({ name, score: abilityScoreMap.get(name)! })
+    );
+    // 不足 5 项 → 用量表里还没选中的维度按高分补齐（保证雷达图总有 5 轴）
+    if (comps.length < 5) {
+      const picked = new Set(comps.map((c) => c.name));
+      const remaining = [...scoring.ability]
+        .filter((a) => !picked.has(a.name))
+        .sort((x, y) => y.score - x.score);
+      for (const a of remaining) {
+        if (comps.length >= 5) break;
+        comps.push({ name: a.name, score: a.score });
+      }
+    }
+
+    return {
+      ...rec,
+      matchScore: clampScore(rec.matchScore),
+      industries: (rec.industries ?? [])
+        .map((s) => String(s).trim())
+        .filter((s) => s.length > 0),
+      coreResponsibilities: Array.isArray(rec.coreResponsibilities)
+        ? rec.coreResponsibilities.map((r) => String(r).trim()).filter(Boolean)
         : undefined,
-  });
+      coreCompetencies: comps.slice(0, 5),
+      fitReason:
+        typeof rec.fitReason === "string" && rec.fitReason.trim().length > 0
+          ? rec.fitReason.trim()
+          : undefined,
+    };
+  };
   return {
     primary: normalizeRec(d.primary),
     secondary: normalizeRec(d.secondary),
@@ -118,14 +146,14 @@ ${APPLICANT_BASELINE}
     * 至少 2 条偏长（20-25 字），偏长的含简短场景或限定词
     * 写法：动作 + 对象（+ 可选场景）
     * 例：「组织跨部门协调会议并跟进结果」「对接外部供应商，谈判合同条款」「统筹年度预算编制与执行复盘」
-  - coreCompetencies: **必须恰好 5 项**核心能力要求 { name: string, score: number }
-    * name：能力名称（4-6 字，如「沟通表达」「执行落地」「信息处理」「学习能力」「协作意识」「抗压韧性」等，按岗位实际需要选）
-    * score：该岗位对此能力的要求程度（0-100），结合用户能力评分判断匹配度
-    * 单个岗位内 5 项 score 不要雷同，要有区分度
-    * **primary 和 secondary 是两个不同岗位**：能力维度组合 + score 必须体现岗位差异 ——
-      不同岗位看重的能力本就不同（如行政岗重「细节把控」「多任务协调」，
-      销售岗重「沟通表达」「抗压韧性」，技术岗重「信息处理」「学习能力」）。
-      两个岗位的 coreCompetencies 不应雷同，否则雷达图会一模一样、失去意义
+  - coreCompetencies: **恰好 5 项**该岗位最看重的核心能力，格式 { name: string }
+    * **name 必须从以下 6 个固定能力维度里选 5 个**（一字不差，不要自创名称、不要加字）：
+      沟通表达 / 协作意识 / 执行落地 / 学习能力 / 信息处理 / 压力适应
+    * 岗位差异**只体现在「选了哪 5 个维度」**，不体现在分数 ——
+      不同岗位看重的能力本就不同（如技术岗常选 信息处理+学习能力+执行落地，
+      服务岗常选 沟通表达+协作意识+压力适应）。primary 和 secondary 的维度组合应不同。
+    * **不要输出 score 字段** —— 雷达图分数由系统统一用用户量表评分填充，
+      确保同一能力在两个岗位、以及和其他模块的雷达图里落点完全一致（逻辑自洽）
   - fitReason: 60-80 字，简明点出 1-2 个最关键的匹配理由（结合用户经历或量表特点），语气正向但克制，不堆砌
 
 【岗位推荐规则】（极重要 — 必须严格按 APPLICANT_BASELINE 的身份指南选岗）
@@ -155,7 +183,7 @@ ${APPLICANT_BASELINE}
     "culture": "string",
     "teamRole": "string",
     "coreResponsibilities": ["14-25 字 偏短", "14-25 字 偏短", "20-25 字 偏长", "14-25 字 中等", "20-25 字 偏长"],
-    "coreCompetencies": [{ "name": "4-6字", "score": number }, "...恰好 5 项..."],
+    "coreCompetencies": [{ "name": "六维之一" }, { "name": "六维之一" }, { "name": "六维之一" }, { "name": "六维之一" }, { "name": "六维之一" }],
     "fitReason": "string"
   },
   "secondary": { ...同结构... }
@@ -229,7 +257,7 @@ export async function POST(req: NextRequest) {
       validator: validatePositioning,
       context: "positioning",
     });
-    const data = normalizePositioning(raw);
+    const data = normalizePositioning(raw, scoring);
     const payload: PositioningResponse = {
       data,
       source: "deepseek",
