@@ -14,6 +14,7 @@ import {
   subscribeQuizStream,
   clearQuizStream,
 } from "@/lib/quiz-prefetch";
+import { startAfterQuiz } from "@/lib/report-bg-runner";
 import type { JobFormData, QuizAnswer, QuizQuestion } from "@/lib/types";
 
 const cubicEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -182,6 +183,12 @@ export default function QuizPage() {
         sessionStorage.setItem("scoring", JSON.stringify(scoring));
         sessionStorage.removeItem("reportData");
       } catch {}
+      // 量表完成后立即开始生成 overview / positioning / resumeDiagnosis
+      try {
+        startAfterQuiz({ formData, quizAnswers: finalAnswers, scoring });
+      } catch (e) {
+        console.warn("[quiz] startAfterQuiz failed (ignored):", e);
+      }
       router.push("/interview?_=" + Date.now());
     } catch (e) {
       console.error("[quiz] submit failed:", e);

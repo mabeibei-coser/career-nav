@@ -1,14 +1,10 @@
 /**
  * Report 章节前端并发调度器（5 模块版）
  * ———————————————
- * career-nav 流程：form → quiz（评分）→ interview（Q1/Q2/Q3 进报告，Q4 占位缓冲）→ loading → report
- * 5 模块依赖关系：
- *   全部 5 个模块统一在 interview Q3 答完后触发，携带 Q1+Q2+Q3 答案。
- *   Q4 为等待缓冲，答案不入报告。
- * loading 页 mount 时调 consumeAll 一次性消费这 5 个 promise。
- *
- * fetch 调度在 lib/report-bg-runner.ts 的 startAfterQ3 里启动；
- * 本文件只负责调度时序常量和实际 fetch 调用 + 容错（429/529 退避、mock fallback、onProgress 回调）。
+ * 触发时序（分两批）：
+ *   - quiz 提交后 → startAfterQuiz → 立即启动 overview(1) / positioning(3) / resumeDiagnosis(4)
+ *   - interview Q2 答完 → startAfterQ2 → 启动 strength(2) / advice(5)，携带 Q1+Q2 答案
+ * loading 页 mount 时调 consumeAll，合并两批 promise。
  */
 import type {
   Advice,
@@ -34,22 +30,24 @@ import { consumeBgSections, type BgSectionKey } from "@/lib/report-bg-runner";
 
 // ===== 静态调度配置 =====
 
+export type Trigger = "afterQuiz" | "afterQ2";
+
 export const SECTION_CONFIG: {
   key: ReportSectionKey;
   endpoint: string;
-  trigger: "afterQ3";
+  trigger: Trigger;
   label: string;
   fallback: unknown;
 }[] = [
-  // 全部 5 个模块在 interview Q3 答完后统一触发，携带 Q1+Q2+Q3 答案
-  { key: "strength", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/strength`, trigger: "afterQ3", label: "分析优势能力", fallback: MOCK_STRENGTH },
-  { key: "positioning", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/positioning`, trigger: "afterQ3", label: "推荐适配岗位", fallback: MOCK_POSITIONING },
-  { key: "advice", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/advice`, trigger: "afterQ3", label: "梳理行动建议", fallback: MOCK_ADVICE },
-  { key: "overview", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/overview`, trigger: "afterQ3", label: "绘制定位总览", fallback: MOCK_OVERVIEW },
-  { key: "resumeDiagnosis", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/resume-diagnosis`, trigger: "afterQ3", label: "诊断简历改进点", fallback: MOCK_RESUME_DIAGNOSIS },
+  // ---- 批次一：quiz 完成后立即启动（不需要访谈答案） ----
+  { key: "overview",        endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/overview`,          trigger: "afterQuiz", label: "绘制定位总览",   fallback: MOCK_OVERVIEW },
+  { key: "positioning",     endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/positioning`,       trigger: "afterQuiz", label: "推荐适配岗位",   fallback: MOCK_POSITIONING },
+  { key: "resumeDiagnosis", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/resume-diagnosis`,  trigger: "afterQuiz", label: "诊断简历改进点", fallback: MOCK_RESUME_DIAGNOSIS },
+  // ---- 批次二：Q2 答完后启动（携带 Q1+Q2 访谈答案） ----
+  { key: "strength",        endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/strength`,          trigger: "afterQ2",   label: "分析优势能力",   fallback: MOCK_STRENGTH },
+  { key: "advice",          endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/advice`,            trigger: "afterQ2",   label: "梳理行动建议",   fallback: MOCK_ADVICE },
 ];
 
-export type Trigger = "afterQ3";
 export type SectionStatus = "pending" | "loading" | "completed" | "fallback" | "skipped";
 
 export interface SectionProgress {
@@ -125,21 +123,28 @@ async function fetchWithRetry<T>(
   throw lastError;
 }
 
-// ===== 按 trigger 分组调度（由 bg-runner 调用） =====
+// ===== 按 trigger 分组调度 =====
 
 export interface StartPayload {
   formData: JobFormData;
   quizAnswers: QuizAnswer[];
   scoring: ScoringResult;
-  interviewQ1Q2?: { Q1?: string; Q2?: string; Q3?: string };
+  interviewQ1Q2?: { Q1?: string; Q2?: string };
 }
 
-/**
- * interview 页 Q3 答完后调用：一次性启动全部 5 个模块，携带 Q1+Q2+Q3 答案。
- * Q4 不触发报告，答案丢弃。
- */
-export function startAfterQ3(payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
-  return startGroup("afterQ3", payload);
+/** quiz 提交后调用：启动 overview / positioning / resumeDiagnosis */
+export function startAfterQuiz(payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
+  return startGroup("afterQuiz", payload);
+}
+
+/** interview Q2 答完后调用：启动 strength / advice，携带 Q1+Q2 答案 */
+export function startAfterQ2(payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
+  return startGroup("afterQ2", payload);
+}
+
+/** @deprecated 已废弃，由 startAfterQuiz + startAfterQ2 替代，保留为 no-op */
+export function startAfterQ3(_payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
+  return new Map();
 }
 
 function startGroup(
@@ -155,7 +160,7 @@ function startGroup(
   };
   for (const section of SECTION_CONFIG) {
     if (section.trigger !== trigger) continue;
-    // 简历快诊：无简历或简历过短直接跳过（不发请求，consumeAll 时 resolve 为 null）
+    // 简历快诊：无简历或简历过短直接跳过
     if (section.key === "resumeDiagnosis") {
       const r = payload.formData.resumeText;
       if (!r || r.length < 50) {
@@ -164,8 +169,6 @@ function startGroup(
       }
     }
     const p = fetchWithRetry<unknown>(section.endpoint, callPayload, 1).catch((err) => {
-      // 不在这里降级到 mock —— 由 consumeAll 在消费时统一处理 fallback，
-      // 这样 onProgress 才能区分"已发起但失败"和"未启动"
       throw err;
     });
     p.catch(() => {}); // 防 unhandled rejection 警告
@@ -181,15 +184,12 @@ export interface ConsumeOptions {
   useMockOnly?: boolean;
   /** 内存 promise miss 时回退现场 fetch 用的 payload */
   fallbackPayload?: StartPayload;
-  /** afterQ1Q2 在 loading 页若 miss，需要的 Q1Q2 摘要 */
+  /** Q2 答完后触发的章节需要 Q1Q2 摘要 */
   interviewQ1Q2?: { Q1?: string; Q2?: string };
 }
 
 /**
- * loading 页 mount 时调用：消费 5 个 promise → 失败章节 fallback 到 mock → 装配 ReportData。
- *
- * 内存 promise miss（如硬刷新丢失）时：通过 bg-runner 的 sessionStorage 标记
- * + fallbackPayload 现场重新 fetch；都失败再 fallback 到 mock。
+ * loading 页 mount 时调用：消费全部 5 个 promise → 失败章节 fallback 到 mock → 装配 ReportData。
  */
 export async function consumeAll(
   formData: JobFormData,
@@ -207,7 +207,7 @@ export async function consumeAll(
   const update = () => options.onProgress?.([...progress]);
   update();
 
-  const callPayload: CallPayload = {
+  const callPayloadBase: CallPayload = {
     formData,
     quizAnswers,
     scoring,
@@ -237,14 +237,13 @@ export async function consumeAll(
         return { key: section.key, data };
       } catch (bgErr) {
         console.warn(`[report] bg-runner promise failed for ${section.key}, retrying:`, bgErr);
-        // 落到下面的现场 fetch
       }
     }
 
     // 现场 fetch（内存 promise miss 或刚才失败）
     try {
       if (options.useMockOnly) throw new Error("forced mock");
-      const data = await fetchWithRetry<unknown>(section.endpoint, callPayload, 1);
+      const data = await fetchWithRetry<unknown>(section.endpoint, callPayloadBase, 1);
       progress[idx].status = "completed";
       update();
       return { key: section.key, data };
@@ -257,7 +256,7 @@ export async function consumeAll(
     }
   });
 
-  // 5 章节并发
+  // 5 章节并发消费（promise 已提前在后台发起，这里只是 await）
   const results = await Promise.all(tasks.map((t) => t()));
   const map = new Map<ReportSectionKey, unknown>();
   for (const r of results) map.set(r.key, r.data);

@@ -13,7 +13,7 @@ import { useAudioVisualizer } from "@/lib/hooks/use-audio-visualizer";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import { ensureAudioCtxUnlocked } from "@/lib/audio-normalizer";
 import { buildQ3Q4 } from "@/lib/interview-questions";
-import { startAfterQ3 } from "@/lib/report-bg-runner";
+import { startAfterQ2 } from "@/lib/report-bg-runner";
 import type {
   InterviewAnswer,
   InterviewQuestion,
@@ -123,11 +123,11 @@ export default function InterviewPage() {
   /** 问候语已播完（或超时），可显示"开始访谈"按钮 */
   const [greetingDone, setGreetingDone] = useState(false);
 
-  // 持有 form/scoring/quizAnswers，触发 startAfterQ3 时不再读 sessionStorage
+  // 持有 form/scoring/quizAnswers，触发 startAfterQ2 时不再读 sessionStorage
   const formDataRef = useRef<JobFormData | null>(null);
   const scoringRef = useRef<ScoringResult | null>(null);
   const quizAnswersRef = useRef<QuizAnswer[]>([]);
-  const q3TriggeredRef = useRef(false);
+  const q2TriggeredRef = useRef(false);
   // questions 的最新值，给 handleStart 的轮询用（state closure 取不到最新）
   const questionsRef = useRef<InterviewQuestion[]>([]);
   // useEffect cleanup（网络监听）
@@ -535,11 +535,11 @@ export default function InterviewPage() {
     router.push("/loading");
   }, [router]);
 
-  // ---------- 触发后台 startAfterQ3（Q3 答完，携带 Q1+Q2+Q3 一次性启动全部 5 个报告模块） ----------
+  // ---------- 触发后台 startAfterQ2（Q2 答完，携带 Q1+Q2 启动 strength/advice） ----------
 
-  const triggerAfterQ3 = useCallback(
-    (q1Text: string, q2Text: string, q3Text: string) => {
-      if (q3TriggeredRef.current) return;
+  const triggerAfterQ2 = useCallback(
+    (q1Text: string, q2Text: string) => {
+      if (q2TriggeredRef.current) return;
       const formData = formDataRef.current;
       const scoring = scoringRef.current;
       if (!formData || !scoring) return;
@@ -547,7 +547,6 @@ export default function InterviewPage() {
       const interviewQ1Q2 = {
         Q1: q1Text || undefined,
         Q2: q2Text || undefined,
-        Q3: q3Text || undefined,
       };
       try {
         // 持久化到 sessionStorage，供 loading 页 consumeAll 现场 fetch 时使用
@@ -560,15 +559,15 @@ export default function InterviewPage() {
       }
 
       try {
-        startAfterQ3({
+        startAfterQ2({
           formData,
           quizAnswers: quizAnswersRef.current,
           scoring,
           interviewQ1Q2,
         });
-        q3TriggeredRef.current = true;
+        q2TriggeredRef.current = true;
       } catch (e) {
-        console.warn("[interview] startAfterQ3 failed (ignored):", e);
+        console.warn("[interview] startAfterQ2 failed (ignored):", e);
       }
     },
     // 全部依赖都是 ref，不需要在数组里
@@ -614,15 +613,13 @@ export default function InterviewPage() {
       setRecognizedText("");
       setTextInput("");
 
-      // Q3 答完（即 currentIndex==2 答完，即将推进到 index=3 的 Q4）
-      // → 触发 startAfterQ3，携带 Q1+Q2+Q3 一次性启动全部 5 个报告模块
-      if (currentIndex === 2) {
+      // Q2 答完（即 currentIndex==1 答完，即将推进到 index=2 的 Q3）
+      // → 触发 startAfterQ2，携带 Q1+Q2 启动 strength / advice
+      if (currentIndex === 1) {
         const q1Text =
           newAnswers.find((a) => a.questionId === "Q1")?.text ?? "";
-        const q2Text =
-          newAnswers.find((a) => a.questionId === "Q2")?.text ?? "";
-        const q3Text = finalText; // 当前确认的 Q3 答案
-        triggerAfterQ3(q1Text, q2Text, q3Text);
+        const q2Text = finalText; // 当前确认的 Q2 答案
+        triggerAfterQ2(q1Text, q2Text);
       }
 
       const nextIndex = currentIndex + 1;
@@ -638,7 +635,7 @@ export default function InterviewPage() {
       currentIndex,
       answers,
       recorder.durationSec,
-      triggerAfterQ3,
+      triggerAfterQ2,
       advanceTo,
       finishAndGo,
     ],
