@@ -1,15 +1,14 @@
 /**
  * Next.js 服务器启动钩子（instrumentation API）
  *
- * 仅在 Node.js runtime（VPS/PM2 部署）执行，Edge runtime 跳过。
- * 触发 quiz 缓存预热：并发生成 15 种 identity×education 组合的题目写入内存缓存，
- * 确保用户到来时所有 LLM 题目已就绪（0ms 命中缓存），彻底消除"等待出题"。
+ * quiz-warmup 已停用（2026-05）：
+ * - 前端量表走 /api/quiz/stream（流式生成），从不读 quiz-cache
+ * - warmup 预热的 15 个 identity×education 组合无人消费（bank 路由前端不调）
+ * - 每次部署/重启都在后台串行烧 15+ 次 LLM 调用且全部失败，更糟的是会与
+ *   用户实时的 /api/quiz/stream 抢讯飞 API 限流额度，直接拖累主路径出题数
+ * - bank 那整套（lib/quiz-warmup、lib/quiz-cache、lib/quiz-generate、
+ *   app/api/quiz/bank*）是历史半成品死代码，建议后续整体清理
  */
 export async function register() {
-  // 只在 Node.js runtime 预热（Edge/Serverless 不共享内存缓存，无效）
-  if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { warmQuizCache } = await import("./lib/quiz-warmup");
-    // fire-and-forget：不 await，不阻塞服务器启动
-    void warmQuizCache();
-  }
+  // 当前无启动期任务
 }
