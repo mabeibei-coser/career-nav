@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileSearch, LayoutList, ShieldCheck } from "lucide-react";
 import { StepIndicator } from "@/components/ui/step-indicator";
-import { prefetchIntroTTS } from "@/lib/intro-tts";
 
 const cubicEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -35,8 +34,6 @@ export default function PreparingPage() {
     }
     router.prefetch("/intro");
     router.prefetch("/quiz");
-    // 利用 ~10s 过场动画提前拉好 intro 页欢迎语 TTS，intro 进来即可播
-    prefetchIntroTTS();
 
     const timers: ReturnType<typeof setTimeout>[] = [];
     const sched = (delay: number, fn: () => void) =>

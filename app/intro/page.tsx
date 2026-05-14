@@ -4,12 +4,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, ListChecks, Mic } from "lucide-react";
-import { playWithBlessedAudio, stopBlessedAudio } from "@/lib/audio-bless";
-import { consumeIntroTTS, isIOS, INTRO_TEXT } from "@/lib/intro-tts";
 import { Button } from "@/components/ui/button";
 import type { InterviewQuestion, JobFormData } from "@/lib/types";
 
 const cubicEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+// intro 欢迎语：构建时由 scripts/generate-tts-cache.mjs 预生成的静态音频
+const INTRO_AUDIO_SRC = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/audio/intro-welcome.mp3`;
+
+// iOS 设备检测（含 iPadOS 13+ 伪装成 Mac 的情况）
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return (
+    /iP(hone|ad|od)/.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
 
 export default function IntroPage() {
   const router = useRouter();
@@ -19,9 +30,8 @@ export default function IntroPage() {
   // iOS 待首次点击播放（Android 走自动播放，此值恒为 false）
   const [needsTap, setNeedsTap] = useState(false);
   const wasSpeakingRef = useRef(false);
-  const ttsBase64Ref = useRef<string | null>(null);
   const isIOSRef = useRef(false);
-  // iOS 点击播放时创建的裸 Audio 元素，handleStart 时需停掉
+  // 当前播放的 Audio 元素，handleStart 时需停掉
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   /* Show CTA only after TTS finishes (or 5s fallback) */
@@ -41,13 +51,13 @@ export default function IntroPage() {
     return () => { clearTimeout(shortTimer); clearTimeout(longTimer); };
   }, []);
 
-  // 裸 Audio 同步播放（iOS 手势栈内 / 任意端重播）
-  const doPlay = useCallback((data: string) => {
+  // 播放欢迎语静态音频（Android mount 时自动调用 / iOS 点击调用）
+  const doPlay = useCallback(() => {
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
     }
-    const audio = new Audio("data:audio/mp3;base64," + data);
+    const audio = new Audio(INTRO_AUDIO_SRC);
     audio.volume = 1.0;
     audio.preload = "auto";
     // @ts-expect-error - playsInline 不在标准 d.ts 里但 iOS 支持
@@ -70,20 +80,7 @@ export default function IntroPage() {
     }
   }, []);
 
-  // TTS 就绪后分流：Android 自动播放，iOS 显示点击引导
-  const onTTSReady = useCallback((data: string) => {
-    ttsBase64Ref.current = data;
-    if (isIOSRef.current) {
-      // iOS：autoplay policy 拦截，不自动播放，显示点击引导
-      setNeedsTap(true);
-    } else {
-      // Android：自动播放（Web Audio 归一化路径）
-      setIsSpeaking(true);
-      playWithBlessedAudio(data, () => setIsSpeaking(false));
-    }
-  }, []);
-
-  // mount：检测平台 + 取 TTS（优先消费 preparing 页预取）+ 预取访谈 Q1Q2
+  // mount：检测平台 + 分流播放（Android 自动 / iOS 待点击）+ 预取访谈 Q1Q2
   useEffect(() => {
     if (typeof window === "undefined") return;
     const formDataStr = sessionStorage.getItem("formData");
@@ -94,30 +91,15 @@ export default function IntroPage() {
     router.prefetch("/quiz");
     isIOSRef.current = isIOS();
 
+    // 欢迎语是静态音频文件：Android 自动播放，iOS 受 autoplay policy 限制改为点击播放
+    if (isIOSRef.current) {
+      setNeedsTap(true);
+    } else {
+      doPlay();
+    }
+
     let cancelled = false;
     const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-
-    // TTS：优先消费 preparing 页预取的缓存，miss 则自己 fetch
-    consumeIntroTTS()
-      .then((audio) => {
-        if (cancelled) return;
-        if (audio) {
-          onTTSReady(audio);
-          return;
-        }
-        // 预取未命中 → 自己 fetch 兜底
-        return fetch(`${base}/api/interview/tts`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: INTRO_TEXT }),
-        })
-          .then((r) => r.json() as Promise<{ audioBase64?: string }>)
-          .then((data) => {
-            if (cancelled) return;
-            if (data?.audioBase64) onTTSReady(data.audioBase64);
-          });
-      })
-      .catch(() => {});
 
     if (!sessionStorage.getItem("interviewQ1Q2")) {
       try {
@@ -146,22 +128,19 @@ export default function IntroPage() {
     return () => {
       cancelled = true;
     };
-  }, [router, onTTSReady]);
+  }, [router, doPlay]);
 
-  // orb 点击：iOS 首次播放 / 任意端重播，同步在手势栈里 new Audio().play()
+  // orb 点击：iOS 首次播放 / 任意端重播，同步在手势栈里
   const handleOrbTap = useCallback(() => {
     if (isSpeaking) return;
-    const data = ttsBase64Ref.current;
-    if (!data) return; // 音频未就绪，不响应（onTTSReady 后会显示引导）
-    doPlay(data);
+    doPlay();
   }, [isSpeaking, doPlay]);
 
   const handleStart = () => {
     if (submitting) return;
     setSubmitting(true);
-    stopBlessedAudio(); // 停 Android Web Audio 路径
     if (currentAudioRef.current) {
-      currentAudioRef.current.pause(); // 停 iOS 裸 Audio
+      currentAudioRef.current.pause();
       currentAudioRef.current = null;
     }
     setIsSpeaking(false);

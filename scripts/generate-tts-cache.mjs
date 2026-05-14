@@ -1,14 +1,16 @@
 /**
- * 预生成访谈用静态 MP3 文件（开场白 + 10 题题库）
+ * 预生成静态 MP3 文件（intro 欢迎语 + 访谈开场白 + 10 题题库）
  *
  * 用法：
  *   node scripts/generate-tts-cache.mjs
  *
  * 需要 .env.local 配好 VOLC_TTS_APP_KEY / VOLC_TTS_ACCESS_KEY / VOLC_TTS_SPEAKER
  *
- * 输出到 public/audio/{greeting,q1,q2,...,q10}.mp3
+ * 输出到 public/audio/{intro-welcome,greeting,q1,q2,...,q10}.mp3
  *
- * 题库变更后需重跑此脚本（题库源在 lib/interview-questions.ts）
+ * 文案变更后需重跑此脚本：
+ *   - intro 欢迎语：本文件 INTRO_WELCOME 常量
+ *   - 访谈开场白/题库：本文件 GREETING / BANK（与 lib/interview-questions.ts 同步）
  */
 
 import { writeFileSync, mkdirSync, existsSync } from "fs";
@@ -47,6 +49,10 @@ if (!APP_KEY || !ACCESS_KEY) {
   console.error("✗ 缺少 VOLC_TTS_APP_KEY / VOLC_TTS_ACCESS_KEY，请检查 .env.local");
   process.exit(1);
 }
+
+// intro 页欢迎语（与 app/intro/page.tsx 的 INTRO_TEXT 保持一致）
+const INTRO_WELCOME =
+  "你好，我是你的 AI 职业助理。接下来我们一起完成两个环节：第一，职业导航自测；第二，AI 语音访谈。你准备好了吗？准备好了，我们就开始测评。";
 
 // 题库数据（与 lib/interview-questions.ts 保持一致；变更后两边同步）
 const GREETING =
@@ -100,18 +106,19 @@ async function generate(name, text) {
 }
 
 async function main() {
-  console.log("生成访谈静态 MP3 缓存");
+  console.log("生成静态 MP3 缓存");
   console.log("speaker:", SPEAKER);
   console.log("输出目录:", OUT_DIR);
   console.log("");
 
+  await generate("intro-welcome", INTRO_WELCOME);
   await generate("greeting", GREETING);
   for (const q of BANK) {
     await generate(q.id, q.text);
   }
 
   console.log("");
-  console.log(`✓ 已生成 ${BANK.length + 1} 个 MP3`);
+  console.log(`✓ 已生成 ${BANK.length + 2} 个 MP3`);
 }
 
 main().catch((e) => {
