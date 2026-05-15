@@ -11,7 +11,7 @@ import PositioningSection from "@/components/report/positioning-section";
 import ResumeDiagnosisSection from "@/components/report/resume-diagnosis-section";
 import AdviceSection from "@/components/report/advice-section";
 import { ExportActions } from "@/components/report/export-actions";
-import { consumeBgSections } from "@/lib/report-bg-runner";
+import { consumeBgGeneratePromise } from "@/lib/report-bg-runner";
 import {
   MOCK_ADVICE,
   MOCK_OVERVIEW,
@@ -163,76 +163,53 @@ export default function ReportPage() {
       }
     }
 
-    // 3. 消费 bg-runner 的 5 个 promise（null = 从未启动，空 Map = 刷新丢失）
-    //    两种 miss 都用 mock 兜底渲染，不再 redirect /loading 避免无限循环
-    const bgPromises = consumeBgSections(formData, quizAnswers);
-    if (!bgPromises || bgPromises.size === 0) {
-      console.warn("[report-page] bg miss, rendering with mock data");
+    // 3. 消费 bg-runner 的 generate promise（null = 从未启动或刷新丢失）
+    //    miss 时 mock 兜底渲染，不 redirect /loading 避免无限循环
+    const bgGeneratePromise = consumeBgGeneratePromise(formData, quizAnswers, interviewQ1Q2);
+    if (!bgGeneratePromise) {
+      console.warn("[report-page] bg generate promise miss, rendering with mock data");
       setSections({
         overview: { data: MOCK_OVERVIEW, status: "mock" },
         strength: { data: MOCK_STRENGTH, status: "mock" },
         positioning: { data: MOCK_POSITIONING, status: "mock" },
-        resumeDiagnosis: { data: hasResume ? MOCK_RESUME_DIAGNOSIS : null, status: hasResume ? "mock" : "done" },
+        resumeDiagnosis: {
+          data: hasResume ? MOCK_RESUME_DIAGNOSIS : null,
+          status: hasResume ? "mock" : "done",
+        },
         advice: { data: MOCK_ADVICE, status: "mock" },
       });
       return;
     }
 
-    // 跳过简历快诊：无简历 → 直接 done(null)，不等 promise
-    if (!hasResume) {
-      setSections((s) => ({
-        ...s,
-        resumeDiagnosis: { data: null, status: "done" },
-      }));
-    }
-
-    // 各 section 独立 await，互不阻塞。每个 await 一份独立 promise，
-    // 装配 5 个不同类型的 section 字段——因此分开写 5 段 await，TS 类型一目了然。
-    const updateSection = <K extends keyof SectionsState>(
-      key: K,
-      data: SectionsState[K]["data"],
-      status: SectionStatus
-    ) => {
-      setSections((s) => ({ ...s, [key]: { data, status } }));
+    // 等单次 generate promise，拆包全部 5 个模块
+    type GenerateSections = {
+      overview?: Overview | null;
+      strength?: Strength | null;
+      positioning?: Positioning | null;
+      resumeDiagnosis?: ResumeDiagnosis | null;
+      advice?: Advice | null;
     };
 
-    async function consume<K extends keyof SectionsState>(
-      key: K,
-      mock: NonNullable<SectionsState[K]["data"]>,
-      label: string
-    ) {
-      const p = bgPromises!.get(key);
-      if (!p) {
-        console.warn(`[report-page] bg promise miss for ${key}, fallback to mock`);
-        updateSection(key, mock, "mock");
-        return;
-      }
+    (async () => {
+      let sections: GenerateSections | null = null;
       try {
-        const data = (await p) as SectionsState[K]["data"];
-        if (data == null) {
-          console.warn(`[report-page] ${label} resolved null, using mock`);
-          updateSection(key, mock, "mock");
-          return;
-        }
-        updateSection(key, data, "done");
+        sections = (await bgGeneratePromise) as GenerateSections | null;
       } catch (err) {
-        console.warn(`[report-page] ${label} promise failed:`, err);
-        updateSection(key, mock, "mock");
+        console.warn("[report-page] bg generate promise failed, using mock:", err);
       }
-    }
 
-    const completions: Promise<void>[] = [
-      consume("overview", MOCK_OVERVIEW, "总评"),
-      consume("strength", MOCK_STRENGTH, "优势发现"),
-      consume("positioning", MOCK_POSITIONING, "职业定位"),
-      consume("advice", MOCK_ADVICE, "行动建议"),
-    ];
-    if (hasResume) {
-      completions.push(consume("resumeDiagnosis", MOCK_RESUME_DIAGNOSIS, "简历快诊"));
-    }
-
-    // 全部 settled 后：装 ReportData + 落库
-    Promise.allSettled(completions).then(() => {
+      const s = sections ?? {};
+      setSections({
+        overview: { data: s.overview ?? MOCK_OVERVIEW, status: s.overview ? "done" : "mock" },
+        strength: { data: s.strength ?? MOCK_STRENGTH, status: s.strength ? "done" : "mock" },
+        positioning: { data: s.positioning ?? MOCK_POSITIONING, status: s.positioning ? "done" : "mock" },
+        resumeDiagnosis: {
+          data: hasResume ? (s.resumeDiagnosis ?? MOCK_RESUME_DIAGNOSIS) : null,
+          status: hasResume ? (s.resumeDiagnosis ? "done" : "mock") : "done",
+        },
+        advice: { data: s.advice ?? MOCK_ADVICE, status: s.advice ? "done" : "mock" },
+      });
+    })().then(() => {
       // 装配最终 ReportData，从最新 state 读（用 setSections 的 functional update 拿到）
       setSections((latest) => {
         const finalReport: ReportData = {

@@ -1,10 +1,11 @@
 /**
- * Report 章节前端并发调度器（5 模块版）
+ * Report 章节前端调度器（5 模块版 · 单请求模式）
  * ———————————————
- * 触发时序（单批）：
- *   - interview Q2 答完 → startAfterQ2 → 同时启动全部 5 个模块，携带 Q1+Q2 答案
- * loading 页 mount 时调 consumeAll 消费结果。
- * Q3/Q4 答案不入报告，仅作访谈体验缓冲。
+ * 触发时序：
+ *   - interview Q2 答完 → bg-runner.startAfterQ2 → clientFireGenerate
+ *     → 单次 POST /api/report/generate（内部顺序生成全部 5 模块，前后逻辑一致）
+ *   - loading 页 mount → consumeAll → 消费 bg-runner 的 promise 或现场 fetch
+ *   - Q3/Q4 答案不入报告，仅作访谈体验缓冲
  */
 import type {
   Advice,
@@ -26,26 +27,11 @@ import {
   MOCK_RESUME_DIAGNOSIS,
   MOCK_STRENGTH,
 } from "@/lib/mocks/report-mocks";
-import { consumeBgSections, type BgSectionKey } from "@/lib/report-bg-runner";
+import { consumeBgGeneratePromise } from "@/lib/report-bg-runner";
 
-// ===== 静态调度配置 =====
+// ===== 类型 =====
 
 export type Trigger = "afterQuiz" | "afterQ2";
-
-export const SECTION_CONFIG: {
-  key: ReportSectionKey;
-  endpoint: string;
-  trigger: Trigger;
-  label: string;
-  fallback: unknown;
-}[] = [
-  // ---- 全部 5 个模块在 Q2 答完后同时启动（携带 Q1+Q2 答案，保证报告逻辑一致） ----
-  { key: "overview",        endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/overview`,          trigger: "afterQ2", label: "绘制定位总览",   fallback: MOCK_OVERVIEW },
-  { key: "positioning",     endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/positioning`,       trigger: "afterQ2", label: "推荐适配岗位",   fallback: MOCK_POSITIONING },
-  { key: "resumeDiagnosis", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/resume-diagnosis`,  trigger: "afterQ2", label: "诊断简历改进点", fallback: MOCK_RESUME_DIAGNOSIS },
-  { key: "strength",        endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/strength`,          trigger: "afterQ2", label: "分析优势能力",   fallback: MOCK_STRENGTH },
-  { key: "advice",          endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/advice`,            trigger: "afterQ2", label: "梳理行动建议",   fallback: MOCK_ADVICE },
-];
 
 export type SectionStatus = "pending" | "loading" | "completed" | "fallback" | "skipped";
 
@@ -56,7 +42,21 @@ export interface SectionProgress {
   error?: string;
 }
 
-// ===== 共享 fetch + 重试逻辑 =====
+export interface StartPayload {
+  formData: JobFormData;
+  quizAnswers: QuizAnswer[];
+  scoring: ScoringResult;
+  interviewQ1Q2?: { Q1?: string; Q2?: string };
+}
+
+// generate 端点返回的数据结构（对应 route 的 data 字段）
+interface GenerateSections {
+  overview: Overview;
+  strength: Strength;
+  positioning: Positioning;
+  resumeDiagnosis: ResumeDiagnosis | null;
+  advice: Advice;
+}
 
 interface CallPayload {
   formData: JobFormData;
@@ -65,12 +65,34 @@ interface CallPayload {
   interviewQ1Q2?: { Q1?: string; Q2?: string };
 }
 
-async function callSection<T>(
-  endpoint: string,
+// ===== 端点配置 =====
+
+const GENERATE_ENDPOINT = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/generate`;
+
+// 5 个 section 的标签（loading 页展示用）
+const SECTION_LABEL: Record<ReportSectionKey, string> = {
+  overview: "绘制定位总览",
+  strength: "分析优势能力",
+  positioning: "推荐适配岗位",
+  resumeDiagnosis: "诊断简历改进点",
+  advice: "梳理行动建议",
+};
+
+const SECTION_KEYS: ReportSectionKey[] = [
+  "overview",
+  "strength",
+  "positioning",
+  "resumeDiagnosis",
+  "advice",
+];
+
+// ===== 网络层 =====
+
+async function callGenerate(
   payload: CallPayload,
   signal?: AbortSignal
-): Promise<T | null> {
-  const res = await fetch(endpoint, {
+): Promise<GenerateSections | null> {
+  const res = await fetch(GENERATE_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -78,12 +100,10 @@ async function callSection<T>(
   });
   if (!res.ok) {
     const j = (await res.json().catch(() => ({}))) as { error?: string };
-    const err = new Error(j.error || `HTTP ${res.status}`);
-    (err as Error & { status?: number }).status = res.status;
-    throw err;
+    throw new Error(j.error || `HTTP ${res.status}`);
   }
-  const json = (await res.json()) as { data?: T };
-  return (json.data ?? null) as T | null;
+  const json = (await res.json()) as { data?: GenerateSections };
+  return json.data ?? null;
 }
 
 function isRateLimitError(e: unknown): boolean {
@@ -97,17 +117,15 @@ function wait(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
-async function fetchWithRetry<T>(
-  endpoint: string,
+async function callGenerateWithRetry(
   payload: CallPayload,
-  retries: number,
-  signal?: AbortSignal
-): Promise<T | null> {
+  retries = 1
+): Promise<GenerateSections | null> {
   let attempts = 0;
   let lastError: unknown;
   while (attempts <= retries) {
     try {
-      return await callSection<T>(endpoint, payload, signal);
+      return await callGenerate(payload);
     } catch (e) {
       lastError = e;
       attempts++;
@@ -122,73 +140,58 @@ async function fetchWithRetry<T>(
   throw lastError;
 }
 
-// ===== 按 trigger 分组调度 =====
+// ===== bg-runner 对接接口 =====
 
-export interface StartPayload {
-  formData: JobFormData;
-  quizAnswers: QuizAnswer[];
-  scoring: ScoringResult;
-  interviewQ1Q2?: { Q1?: string; Q2?: string };
-}
-
-/** @deprecated no-op：所有模块已改为 afterQ2 触发，保留函数签名避免编译报错 */
-export function startAfterQuiz(_payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
-  return new Map();
-}
-
-/** interview Q2 答完后调用：启动 strength / advice，携带 Q1+Q2 答案 */
-export function startAfterQ2(payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
-  return startGroup("afterQ2", payload);
-}
-
-/** @deprecated 已废弃，由 startAfterQuiz + startAfterQ2 替代，保留为 no-op */
-export function startAfterQ3(_payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
-  return new Map();
-}
-
-function startGroup(
-  trigger: Trigger,
-  payload: StartPayload
-): Map<ReportSectionKey, Promise<unknown>> {
-  const promises = new Map<ReportSectionKey, Promise<unknown>>();
+/**
+ * bg-runner 调用此函数触发单次 generate 请求。
+ * 返回 Promise<GenerateSections | null>，bg-runner 存储后在 consumeAll 里消费。
+ */
+export function clientFireGenerate(payload: StartPayload): Promise<unknown> {
   const callPayload: CallPayload = {
     formData: payload.formData,
     quizAnswers: payload.quizAnswers,
     scoring: payload.scoring,
     interviewQ1Q2: payload.interviewQ1Q2,
   };
-  for (const section of SECTION_CONFIG) {
-    if (section.trigger !== trigger) continue;
-    // 简历快诊：无简历或简历过短直接跳过
-    if (section.key === "resumeDiagnosis") {
-      const r = payload.formData.resumeText;
-      if (!r || r.length < 50) {
-        promises.set(section.key, Promise.resolve(null));
-        continue;
-      }
-    }
-    const p = fetchWithRetry<unknown>(section.endpoint, callPayload, 1).catch((err) => {
-      throw err;
-    });
-    p.catch(() => {}); // 防 unhandled rejection 警告
-    promises.set(section.key, p);
-  }
-  return promises;
+  return callGenerateWithRetry(callPayload, 1);
 }
 
-// ===== loading 页消费层 =====
+/** @deprecated no-op：保留函数签名供历史调用点 import 不破 */
+export function startAfterQuiz(_payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
+  return new Map();
+}
+
+/** @deprecated bg-runner 现在直接调 clientFireGenerate；此函数作为 no-op 保留 */
+export function startAfterQ2(_payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
+  return new Map();
+}
+
+/** @deprecated no-op */
+export function startAfterQ3(_payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
+  return new Map();
+}
+
+// ===== ConsumeOptions =====
 
 export interface ConsumeOptions {
   onProgress?: (progress: SectionProgress[]) => void;
   useMockOnly?: boolean;
-  /** 内存 promise miss 时回退现场 fetch 用的 payload */
   fallbackPayload?: StartPayload;
-  /** Q2 答完后触发的章节需要 Q1Q2 摘要 */
   interviewQ1Q2?: { Q1?: string; Q2?: string };
 }
 
+// ===== 核心：consumeAll =====
+
 /**
- * loading 页 mount 时调用：消费全部 5 个 promise → 失败章节 fallback 到 mock → 装配 ReportData。
+ * loading 页 mount 时调用：
+ * 1. 优先消费 bg-runner 后台已触发的 promise（Q2 → Q3/Q4 期间预热）
+ * 2. 内存 miss → 现场调 /api/report/generate
+ * 3. 失败 → 全部 fallback 到 mock
+ * 4. 组装并返回完整 ReportData
+ *
+ * 进度回调：
+ * - 开始：所有 section "loading"（resumeDiagnosis 无简历时直接 "skipped"）
+ * - 结束：成功则全部 "completed"，失败则全部 "fallback"
  */
 export async function consumeAll(
   formData: JobFormData,
@@ -196,84 +199,98 @@ export async function consumeAll(
   scoring: ScoringResult,
   options: ConsumeOptions = {}
 ): Promise<ReportData> {
-  const bgPrefetched = consumeBgSections(formData, quizAnswers);
+  const hasResume = Boolean(formData.resumeText && formData.resumeText.length >= 50);
 
-  const progress: SectionProgress[] = SECTION_CONFIG.map((s) => ({
-    key: s.key,
-    label: s.label,
-    status: "pending",
+  // ---- 初始进度：全部 loading ----
+  const loadingProgress: SectionProgress[] = SECTION_KEYS.map((key) => ({
+    key,
+    label: SECTION_LABEL[key],
+    status: key === "resumeDiagnosis" && !hasResume ? "skipped" : "loading",
   }));
-  const update = () => options.onProgress?.([...progress]);
-  update();
+  options.onProgress?.([...loadingProgress]);
 
-  const callPayloadBase: CallPayload = {
+  const callPayload: CallPayload = {
     formData,
     quizAnswers,
     scoring,
     interviewQ1Q2: options.interviewQ1Q2,
   };
 
-  const tasks = SECTION_CONFIG.map((section, idx) => async () => {
-    if (
-      section.key === "resumeDiagnosis" &&
-      (!formData.resumeText || formData.resumeText.length < 50)
-    ) {
-      progress[idx].status = "skipped";
-      update();
-      return { key: section.key, data: null };
+  let sections: GenerateSections | null = null;
+  let fetchError: unknown = null;
+
+  // ---- 1. 尝试消费 bg-runner 后台 promise ----
+  const bgPromise = consumeBgGeneratePromise(
+    formData,
+    quizAnswers,
+    options.interviewQ1Q2 ?? {}
+  );
+  if (bgPromise !== null) {
+    try {
+      sections = (await bgPromise) as GenerateSections | null;
+    } catch (e) {
+      console.warn("[consumeAll] bg promise failed, will retry fresh:", e);
+      fetchError = e;
     }
+  }
 
-    progress[idx].status = "loading";
-    update();
-
-    // 优先消费 bg-runner 的内存 promise
-    const bgPromise = bgPrefetched?.get(section.key as BgSectionKey);
-    if (bgPromise !== undefined) {
+  // ---- 2. 内存 miss 或 bg 失败 → 现场 fetch ----
+  if (!sections) {
+    if (options.useMockOnly) {
+      console.info("[consumeAll] useMockOnly=true, skipping fetch");
+    } else {
       try {
-        const data = await bgPromise;
-        progress[idx].status = "completed";
-        update();
-        return { key: section.key, data };
-      } catch (bgErr) {
-        console.warn(`[report] bg-runner promise failed for ${section.key}, retrying:`, bgErr);
+        sections = await callGenerateWithRetry(callPayload, 1);
+      } catch (e) {
+        fetchError = e;
+        console.warn("[consumeAll] fresh generate fetch failed, all-mock fallback:", e);
       }
     }
+  }
 
-    // 现场 fetch（内存 promise miss 或刚才失败）
-    try {
-      if (options.useMockOnly) throw new Error("forced mock");
-      const data = await fetchWithRetry<unknown>(section.endpoint, callPayloadBase, 1);
-      progress[idx].status = "completed";
-      update();
-      return { key: section.key, data };
-    } catch (e) {
-      console.warn(`[report] ${section.key} failed, using mock:`, e);
-      progress[idx].status = "fallback";
-      progress[idx].error = e instanceof Error ? e.message : String(e);
-      update();
-      return { key: section.key, data: section.fallback };
-    }
-  });
+  // ---- 3. 提取各模块，失败的单独 mock 兜底 ----
+  const overview: Overview = sections?.overview ?? {
+    ...MOCK_OVERVIEW,
+    fourDimRadar: scoring.fourDim.map((d, i) => ({
+      name: d.name,
+      score: d.score,
+      ...(MOCK_OVERVIEW.fourDimRadar[i]?.conclusion
+        ? { conclusion: MOCK_OVERVIEW.fourDimRadar[i].conclusion }
+        : {}),
+    })),
+  };
+  const strength: Strength = sections?.strength ?? {
+    ...MOCK_STRENGTH,
+    abilityRadar: scoring.ability.map((a) => ({ name: a.name, score: a.score })),
+  };
+  const positioning: Positioning = sections?.positioning ?? MOCK_POSITIONING;
+  const resumeDiagnosis: ResumeDiagnosis | null = !hasResume
+    ? null
+    : (sections?.resumeDiagnosis ?? MOCK_RESUME_DIAGNOSIS);
+  const advice: Advice = sections?.advice ?? MOCK_ADVICE;
 
-  // 5 章节并发消费（promise 已提前在后台发起，这里只是 await）
-  const results = await Promise.all(tasks.map((t) => t()));
-  const map = new Map<ReportSectionKey, unknown>();
-  for (const r of results) map.set(r.key, r.data);
+  // ---- 4. 最终进度 ----
+  const finalStatus: SectionStatus = sections ? "completed" : "fallback";
+  const finalProgress: SectionProgress[] = SECTION_KEYS.map((key) => ({
+    key,
+    label: SECTION_LABEL[key],
+    status: key === "resumeDiagnosis" && !hasResume
+      ? "skipped"
+      : finalStatus,
+    ...(finalStatus === "fallback" && fetchError
+      ? { error: fetchError instanceof Error ? fetchError.message : String(fetchError) }
+      : {}),
+  }));
+  options.onProgress?.([...finalProgress]);
 
+  // ---- 5. 组装 ReportData ----
   const meta: ReportMeta = {
     generatedAt: new Date().toISOString(),
     formData,
     scoring,
-    hasResume: Boolean(formData.resumeText && formData.resumeText.length > 50),
+    hasResume,
     interviewQ1Q2: options.interviewQ1Q2 ?? {},
   };
 
-  return {
-    meta,
-    overview: map.get("overview") as Overview,
-    strength: map.get("strength") as Strength,
-    positioning: map.get("positioning") as Positioning,
-    resumeDiagnosis: map.get("resumeDiagnosis") as ResumeDiagnosis | null,
-    advice: map.get("advice") as Advice,
-  };
+  return { meta, overview, strength, positioning, resumeDiagnosis, advice };
 }

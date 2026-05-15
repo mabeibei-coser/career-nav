@@ -53,8 +53,8 @@ const SECTION_LABELS: Record<ReportSectionKey, string> = {
   advice: "行动建议",
 };
 
-// 90 秒超时（design review 要求：不让用户无限等）
-const TIMEOUT_MS = 90_000;
+// 180 秒超时：顺序生成 5 模块，P95 约 150s，给足缓冲
+const TIMEOUT_MS = 180_000;
 
 // ===== 身份化 Tips =====
 
@@ -576,7 +576,7 @@ export default function LoadingPage() {
             正在生成你的职业导航报告
           </h1>
           <p className="text-[13px] sm:text-sm text-[var(--muted-foreground)]">
-            评估包含 5 个模块，部分模块在答题阶段已开始预热
+            5 个模块整体生成，前后章节逻辑一致，约需 1-2 分钟
           </p>
         </motion.div>
 

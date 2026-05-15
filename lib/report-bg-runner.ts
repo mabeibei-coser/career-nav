@@ -1,34 +1,33 @@
 /**
- * Report 章节后台 runner（career-nav 5 模块版）
+ * Report 章节后台 runner（career-nav 5 模块版 · 单请求模式）
  * ———————————————
- * 调度时序（单批）：
+ * 调度时序：
  *   - interview Q2 答完 → startAfterQ2(payload)
- *     同时启动全部 5 个模块，携带 Q1+Q2 答案（保证报告逻辑一致）
- *   - Q3/Q4 答案不入报告，仅作访谈体验缓冲
- *   - interview 完成 → 跳 loading 页 → consumeBgSections 消费 promise
+ *     触发 /api/report/generate（单次请求，内部顺序生成全部 5 个模块）
+ *   - Q3/Q4 答案不入报告，仅作访谈体验缓冲（生成在此期间后台运行）
+ *   - interview 完成 → 跳 loading 页 → consumeBgGeneratePromise 消费 promise
  *
  * 防刷新丢失：startAfterQ2 把 fingerprint 写 sessionStorage；loading 页
- * consumeAll 检测到内存 miss 但 sessionStorage 有标记，现场重新 fetch。
+ * consumeAll 检测到内存 miss 但 sessionStorage 有标记时，现场重新 fetch。
  */
 
-import type { JobFormData, QuizAnswer, ScoringResult } from "@/lib/types";
-import type { ReportSectionKey } from "@/lib/types";
-import {
-  startAfterQ2 as clientStartAfterQ2,
-  type StartPayload,
-} from "@/lib/report-client";
+import type { JobFormData, QuizAnswer } from "@/lib/types";
+import { clientFireGenerate, type StartPayload } from "@/lib/report-client";
 
-export type BgSectionKey = ReportSectionKey;
+// ---- 内部状态 ----
 
-interface BgState {
+interface PendingGenerate {
   fingerprint: string;
-  promises: Map<BgSectionKey, Promise<unknown>>;
+  // Promise<unknown> 对外隐藏具体类型，consumeAll 内部会强制转换
+  promise: Promise<unknown>;
   startedAt: number;
 }
 
-let pendingAfterQ2: BgState | null = null;
+let pendingGenerate: PendingGenerate | null = null;
 
-const SS_KEY_AFTER_Q2 = "career-nav:bg-runner:afterQ2";
+const SS_KEY = "career-nav:bg-runner:generate";
+
+// ---- fingerprint helpers ----
 
 function fingerprintForm(formData: JobFormData, quizAnswers: QuizAnswer[]): string {
   const resumeHash = formData.resumeText?.slice(0, 50) ?? "";
@@ -39,13 +38,11 @@ function fingerprintForm(formData: JobFormData, quizAnswers: QuizAnswer[]): stri
     formData.workYears,
     resumeHash,
   ].join("|");
-  const quizPart = quizAnswers
-    .map((a) => `${a.questionId}:${a.selectedLabel}`)
-    .join(",");
+  const quizPart = quizAnswers.map((a) => `${a.questionId}:${a.selectedLabel}`).join(",");
   return `${formPart}#${quizPart}`;
 }
 
-function fingerprintWithInterview(
+function fingerprintFull(
   formData: JobFormData,
   quizAnswers: QuizAnswer[],
   q1q2: { Q1?: string; Q2?: string }
@@ -56,95 +53,96 @@ function fingerprintWithInterview(
   return `${base}@@${q1Hash}::${q2Hash}`;
 }
 
-function writeSessionMark(key: string, fingerprint: string) {
+function writeSessionMark(fp: string) {
   if (typeof window === "undefined") return;
-  try { window.sessionStorage.setItem(key, fingerprint); } catch { /* ignore */ }
+  try { window.sessionStorage.setItem(SS_KEY, fp); } catch { /* ignore */ }
 }
 
-function readSessionMark(key: string): string | null {
+function readSessionMark(): string | null {
   if (typeof window === "undefined") return null;
-  try { return window.sessionStorage.getItem(key); } catch { return null; }
+  try { return window.sessionStorage.getItem(SS_KEY); } catch { return null; }
 }
 
-function clearSessionMark(key: string) {
+function clearSessionMark() {
   if (typeof window === "undefined") return;
-  try { window.sessionStorage.removeItem(key); } catch { /* ignore */ }
+  try { window.sessionStorage.removeItem(SS_KEY); } catch { /* ignore */ }
 }
 
 // ========== Public API ==========
 
-/** @deprecated no-op：所有模块已改为 startAfterQ2 触发 */
+/** @deprecated no-op */
 export function startAfterQuiz(_payload: StartPayload): void {
   // no-op
 }
 
 /**
- * interview Q2 答完后调用：启动 strength / advice，携带 Q1+Q2 答案。
+ * interview Q2 答完后调用：触发 /api/report/generate（单次请求，顺序生成全部模块）。
  * 重入幂等：相同 fingerprint 已 pending 则跳过。
  */
 export function startAfterQ2(payload: StartPayload): void {
   if (typeof window === "undefined") return;
-  const fp = fingerprintWithInterview(
+  const fp = fingerprintFull(
     payload.formData,
     payload.quizAnswers,
     payload.interviewQ1Q2 ?? {}
   );
-  if (pendingAfterQ2 && pendingAfterQ2.fingerprint === fp) {
-    console.info("[bg-runner] startAfterQ2 hit (idempotent)", { fp: fp.slice(0, 50) });
+  if (pendingGenerate && pendingGenerate.fingerprint === fp) {
+    console.info("[bg-runner] startAfterQ2 idempotent hit", { fp: fp.slice(0, 50) });
     return;
   }
-  const promises = clientStartAfterQ2(payload);
-  pendingAfterQ2 = { fingerprint: fp, promises, startedAt: Date.now() };
-  writeSessionMark(SS_KEY_AFTER_Q2, fp);
-  console.info("[bg-runner] startAfterQ2 fired (sections 2,5)", { fp: fp.slice(0, 50) });
+  const promise = clientFireGenerate(payload);
+  promise.catch(() => {}); // 防 unhandled rejection 警告
+  pendingGenerate = { fingerprint: fp, promise, startedAt: Date.now() };
+  writeSessionMark(fp);
+  console.info("[bg-runner] startAfterQ2 fired → /api/report/generate", { fp: fp.slice(0, 50) });
 }
 
-/** @deprecated 已废弃，no-op */
+/** @deprecated no-op */
 export function startAfterQ3(_payload: StartPayload): void {
-  // no-op：报告生成已移至 startAfterQuiz + startAfterQ2
-}
-
-/** @deprecated 已废弃，no-op */
-export function startAfterQ1Q2(_payload: StartPayload): void {
   // no-op
 }
 
 /**
- * loading 页 mount 时调用：消费 afterQ2 内存 promise。
+ * loading 页 mount 时调用：返回后台 generate promise 或 null。
  *
  * 行为：
- * 1. 内存 promise 命中 → 返回 Map（全部 5 个 key）
- * 2. 内存 miss 但 sessionStorage 有标记 → 返回空 Map，让 consumeAll 现场 fetch
+ * 1. 内存 promise 命中（fingerprint 前缀匹配）→ 返回 Promise
+ * 2. 内存 miss 但 sessionStorage 有标记（刷新场景）→ 返回 null，由 consumeAll 现场 fetch
  * 3. 双双 miss → 返回 null，consumeAll 全量现场 fetch
  */
-export function consumeBgSections(
+export function consumeBgGeneratePromise(
   formData: JobFormData,
-  quizAnswers: QuizAnswer[]
-): Map<BgSectionKey, Promise<unknown>> | null {
+  quizAnswers: QuizAnswer[],
+  q1q2: { Q1?: string; Q2?: string }
+): Promise<unknown> | null {
   if (typeof window === "undefined") return null;
 
+  const fp = fingerprintFull(formData, quizAnswers, q1q2);
+
+  if (pendingGenerate && pendingGenerate.fingerprint === fp) {
+    console.info("[bg-runner] consume hit (generate promise)", { age: Date.now() - pendingGenerate.startedAt });
+    return pendingGenerate.promise;
+  }
+
+  // fingerprint 前缀匹配：loading 页不一定知道访谈内容，但 formData+quiz 相同即可
   const fpForm = fingerprintForm(formData, quizAnswers);
-  const out = new Map<BgSectionKey, Promise<unknown>>();
-
-  // afterQ2 batch（fingerprint 含 Q1Q2 哈希，loading 页不知访谈内容，只比前缀）
-  if (pendingAfterQ2 && pendingAfterQ2.fingerprint.startsWith(fpForm + "@@")) {
-    for (const [k, p] of pendingAfterQ2.promises) out.set(k, p);
-    console.info("[bg-runner] consume hit (afterQ2)", { count: pendingAfterQ2.promises.size });
-    return out;
+  if (pendingGenerate && pendingGenerate.fingerprint.startsWith(fpForm + "@@")) {
+    console.info("[bg-runner] consume hit (prefix match)");
+    return pendingGenerate.promise;
   }
 
-  if (pendingAfterQ2) {
-    console.warn("[bg-runner] afterQ2 fingerprint mismatch, dropping");
-    pendingAfterQ2 = null;
+  if (pendingGenerate) {
+    console.warn("[bg-runner] fingerprint mismatch, dropping pending promise");
+    pendingGenerate = null;
   }
 
-  const ss = readSessionMark(SS_KEY_AFTER_Q2);
+  const ss = readSessionMark();
   if (ss) {
-    console.info("[bg-runner] afterQ2 miss (refresh detected)");
-    return out; // 空 Map → consumeAll 会现场 fetch
+    console.info("[bg-runner] sessionStorage mark found (refresh detected), fresh fetch needed");
+    return null;
   }
 
-  console.info("[bg-runner] consume null (never started or skipped interview)");
+  console.info("[bg-runner] consume null (never started)");
   return null;
 }
 
@@ -152,6 +150,6 @@ export function consumeBgSections(
  * 报告生成完成或用户主动重置时调用：清空内存 + sessionStorage。
  */
 export function clearBgSections(): void {
-  pendingAfterQ2 = null;
-  clearSessionMark(SS_KEY_AFTER_Q2);
+  pendingGenerate = null;
+  clearSessionMark();
 }

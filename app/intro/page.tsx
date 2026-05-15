@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, ListChecks, Mic } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { playBlessedUrl, stopBlessedAudio } from "@/lib/audio-bless";
 import {
@@ -257,7 +257,6 @@ export default function IntroPage() {
                   8 道情境判断题，评估你的职业偏好与工作风格
                 </p>
               </div>
-              <ListChecks className="shrink-0 size-[18px] text-[var(--blue-300)] mt-1" strokeWidth={1.8} />
             </div>
 
             {/* Divider */}
@@ -276,7 +275,6 @@ export default function IntroPage() {
                   4 道语音问答，AI 深入了解你的职业经历与求职意向
                 </p>
               </div>
-              <Mic className="shrink-0 size-[18px] text-[var(--blue-300)] mt-1" strokeWidth={1.8} />
             </div>
           </div>
 
