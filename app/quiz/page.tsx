@@ -15,6 +15,7 @@ import {
   clearQuizStream,
 } from "@/lib/quiz-prefetch";
 import { startAfterQuiz } from "@/lib/report-bg-runner";
+import { blessAudio } from "@/lib/audio-bless";
 import type { JobFormData, QuizAnswer, QuizQuestion } from "@/lib/types";
 
 const cubicEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -176,6 +177,9 @@ export default function QuizPage() {
   const handleSubmit = () => {
     if (!allAnswered || !formData || submitting) return;
     setSubmitting(true);
+    // iOS AudioContext 续期：form 页 blessAudio() 后用户答 8 题可能花几十秒，
+    // iOS 会挂起 AudioContext；这里用最近的手势重新解锁，保证 interview 页能 autoplay。
+    blessAudio();
     try {
       const finalAnswers = persistAnswers(answers, questions);
       const scoring = scoreQuiz(finalAnswers, questions);
