@@ -1,21 +1,19 @@
 /**
  * Report 章节后台 runner（career-nav 5 模块版）
  * ———————————————
- * 调度时序（分两批）：
- *   - quiz 提交 → startAfterQuiz(payload)
- *     启动 overview(1) / positioning(3) / resumeDiagnosis(4)
+ * 调度时序（单批）：
  *   - interview Q2 答完 → startAfterQ2(payload)
- *     启动 strength(2) / advice(5)，携带 Q1+Q2 答案
- *   - interview 完成 → 跳 loading 页 → consumeBgSections 合并两批 promise
+ *     同时启动全部 5 个模块，携带 Q1+Q2 答案（保证报告逻辑一致）
+ *   - Q3/Q4 答案不入报告，仅作访谈体验缓冲
+ *   - interview 完成 → 跳 loading 页 → consumeBgSections 消费 promise
  *
- * 防刷新丢失：两个 startAfter* 各自把 fingerprint 写 sessionStorage；loading 页
+ * 防刷新丢失：startAfterQ2 把 fingerprint 写 sessionStorage；loading 页
  * consumeAll 检测到内存 miss 但 sessionStorage 有标记，现场重新 fetch。
  */
 
 import type { JobFormData, QuizAnswer, ScoringResult } from "@/lib/types";
 import type { ReportSectionKey } from "@/lib/types";
 import {
-  startAfterQuiz as clientStartAfterQuiz,
   startAfterQ2 as clientStartAfterQ2,
   type StartPayload,
 } from "@/lib/report-client";
@@ -28,11 +26,9 @@ interface BgState {
   startedAt: number;
 }
 
-let pendingAfterQuiz: BgState | null = null;
 let pendingAfterQ2: BgState | null = null;
 
-const SS_KEY_AFTER_QUIZ = "career-nav:bg-runner:afterQuiz";
-const SS_KEY_AFTER_Q2   = "career-nav:bg-runner:afterQ2";
+const SS_KEY_AFTER_Q2 = "career-nav:bg-runner:afterQ2";
 
 function fingerprintForm(formData: JobFormData, quizAnswers: QuizAnswer[]): string {
   const resumeHash = formData.resumeText?.slice(0, 50) ?? "";
@@ -77,21 +73,9 @@ function clearSessionMark(key: string) {
 
 // ========== Public API ==========
 
-/**
- * quiz 提交后调用：启动 overview / positioning / resumeDiagnosis。
- * 重入幂等：相同 fingerprint 已 pending 则跳过。
- */
-export function startAfterQuiz(payload: StartPayload): void {
-  if (typeof window === "undefined") return;
-  const fp = fingerprintForm(payload.formData, payload.quizAnswers);
-  if (pendingAfterQuiz && pendingAfterQuiz.fingerprint === fp) {
-    console.info("[bg-runner] startAfterQuiz hit (idempotent)", { fp: fp.slice(0, 50) });
-    return;
-  }
-  const promises = clientStartAfterQuiz(payload);
-  pendingAfterQuiz = { fingerprint: fp, promises, startedAt: Date.now() };
-  writeSessionMark(SS_KEY_AFTER_QUIZ, fp);
-  console.info("[bg-runner] startAfterQuiz fired (sections 1,3,4)", { fp: fp.slice(0, 50) });
+/** @deprecated no-op：所有模块已改为 startAfterQ2 触发 */
+export function startAfterQuiz(_payload: StartPayload): void {
+  // no-op
 }
 
 /**
@@ -126,10 +110,10 @@ export function startAfterQ1Q2(_payload: StartPayload): void {
 }
 
 /**
- * loading 页 mount 时调用：合并 afterQuiz + afterQ2 两批内存 promise。
+ * loading 页 mount 时调用：消费 afterQ2 内存 promise。
  *
  * 行为：
- * 1. 内存 promise 命中 → 返回合并 Map
+ * 1. 内存 promise 命中 → 返回 Map（全部 5 个 key）
  * 2. 内存 miss 但 sessionStorage 有标记 → 返回空 Map，让 consumeAll 现场 fetch
  * 3. 双双 miss → 返回 null，consumeAll 全量现场 fetch
  */
@@ -141,46 +125,23 @@ export function consumeBgSections(
 
   const fpForm = fingerprintForm(formData, quizAnswers);
   const out = new Map<BgSectionKey, Promise<unknown>>();
-  let anyHit = false;
-  let anyMiss = false;
 
-  // --- afterQuiz batch ---
-  if (pendingAfterQuiz && pendingAfterQuiz.fingerprint === fpForm) {
-    for (const [k, p] of pendingAfterQuiz.promises) out.set(k, p);
-    anyHit = true;
-    console.info("[bg-runner] consume hit (afterQuiz)", { count: pendingAfterQuiz.promises.size });
-  } else {
-    if (pendingAfterQuiz) {
-      console.warn("[bg-runner] afterQuiz fingerprint mismatch, dropping");
-      pendingAfterQuiz = null;
-    }
-    const ss = readSessionMark(SS_KEY_AFTER_QUIZ);
-    if (ss) {
-      console.info("[bg-runner] afterQuiz miss (refresh detected)");
-      anyMiss = true;
-    }
-  }
-
-  // --- afterQ2 batch（fingerprint 含 Q1Q2 哈希，loading 页不知访谈内容，只比前缀） ---
+  // afterQ2 batch（fingerprint 含 Q1Q2 哈希，loading 页不知访谈内容，只比前缀）
   if (pendingAfterQ2 && pendingAfterQ2.fingerprint.startsWith(fpForm + "@@")) {
     for (const [k, p] of pendingAfterQ2.promises) out.set(k, p);
-    anyHit = true;
     console.info("[bg-runner] consume hit (afterQ2)", { count: pendingAfterQ2.promises.size });
-  } else {
-    if (pendingAfterQ2) {
-      console.warn("[bg-runner] afterQ2 fingerprint mismatch, dropping");
-      pendingAfterQ2 = null;
-    }
-    const ss = readSessionMark(SS_KEY_AFTER_Q2);
-    if (ss) {
-      console.info("[bg-runner] afterQ2 miss (refresh detected)");
-      anyMiss = true;
-    }
+    return out;
   }
 
-  if (anyHit || anyMiss) {
-    // 有命中或 sessionStorage 标记 → 返回合并 Map（部分 key 可能缺失，consumeAll 会现场 fetch）
-    return out;
+  if (pendingAfterQ2) {
+    console.warn("[bg-runner] afterQ2 fingerprint mismatch, dropping");
+    pendingAfterQ2 = null;
+  }
+
+  const ss = readSessionMark(SS_KEY_AFTER_Q2);
+  if (ss) {
+    console.info("[bg-runner] afterQ2 miss (refresh detected)");
+    return out; // 空 Map → consumeAll 会现场 fetch
   }
 
   console.info("[bg-runner] consume null (never started or skipped interview)");
@@ -191,8 +152,6 @@ export function consumeBgSections(
  * 报告生成完成或用户主动重置时调用：清空内存 + sessionStorage。
  */
 export function clearBgSections(): void {
-  pendingAfterQuiz = null;
   pendingAfterQ2 = null;
-  clearSessionMark(SS_KEY_AFTER_QUIZ);
   clearSessionMark(SS_KEY_AFTER_Q2);
 }

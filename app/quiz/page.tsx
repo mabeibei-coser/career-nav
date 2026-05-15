@@ -14,7 +14,7 @@ import {
   subscribeQuizStream,
   clearQuizStream,
 } from "@/lib/quiz-prefetch";
-import { startAfterQuiz } from "@/lib/report-bg-runner";
+
 import { blessAudio } from "@/lib/audio-bless";
 import type { JobFormData, QuizAnswer, QuizQuestion } from "@/lib/types";
 
@@ -187,12 +187,6 @@ export default function QuizPage() {
         sessionStorage.setItem("scoring", JSON.stringify(scoring));
         sessionStorage.removeItem("reportData");
       } catch {}
-      // 量表完成后立即开始生成 overview / positioning / resumeDiagnosis
-      try {
-        startAfterQuiz({ formData, quizAnswers: finalAnswers, scoring });
-      } catch (e) {
-        console.warn("[quiz] startAfterQuiz failed (ignored):", e);
-      }
       router.push("/interview?_=" + Date.now());
     } catch (e) {
       console.error("[quiz] submit failed:", e);

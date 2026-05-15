@@ -379,13 +379,13 @@ export default function LoadingPage() {
     let formData: JobFormData | null = null;
     let scoring: ScoringResult | null = null;
     let quizAnswers: QuizAnswer[] = [];
-    let interviewQ1Q2: { Q1?: string; Q2?: string; Q3?: string } = {};
+    let interviewQ1Q2: { Q1?: string; Q2?: string } = {};
 
     try {
       const fdStr = sessionStorage.getItem("formData");
       const scStr = sessionStorage.getItem("scoring");
       const qaStr = sessionStorage.getItem("quizAnswers");
-      // interviewQ1Q2 由 interview 页 Q3 答完时写入（含 Q1+Q2+Q3）
+      // interviewQ1Q2 由 interview 页 Q2 答完时写入（含 Q1+Q2）
       const ivStr = sessionStorage.getItem("interviewQ1Q2");
       // interviewData 含 summary（兜底）
       const idStr = sessionStorage.getItem("interviewData");
@@ -403,18 +403,13 @@ export default function LoadingPage() {
       }
       quizAnswers = qaStr ? (JSON.parse(qaStr) as QuizAnswer[]) : [];
 
-      // 优先用 interviewQ1Q2 key（由 Q3 触发时写入，含 Q1+Q2+Q3）
+      // 优先用 interviewQ1Q2 key（由 Q2 触发时写入，含 Q1+Q2）
       if (ivStr) {
         try {
-          const parsed = JSON.parse(ivStr) as {
-            Q1?: string;
-            Q2?: string;
-            Q3?: string;
-          };
+          const parsed = JSON.parse(ivStr) as { Q1?: string; Q2?: string };
           interviewQ1Q2 = {
             Q1: parsed.Q1 || undefined,
             Q2: parsed.Q2 || undefined,
-            Q3: parsed.Q3 || undefined,
           };
         } catch {
           /* ignore parse error */

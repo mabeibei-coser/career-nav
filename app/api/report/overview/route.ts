@@ -79,7 +79,6 @@ function buildInterviewSummary(q1q2: InterviewQ1Q2): string | undefined {
   const parts: string[] = [];
   if (q1q2.Q1?.trim()) parts.push(`Q1 回答：${q1q2.Q1.trim()}`);
   if (q1q2.Q2?.trim()) parts.push(`Q2 回答：${q1q2.Q2.trim()}`);
-  if (q1q2.Q3?.trim()) parts.push(`Q3 回答：${q1q2.Q3.trim()}`);
   return parts.length > 0 ? parts.join("\n") : undefined;
 }
 

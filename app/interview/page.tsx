@@ -24,8 +24,8 @@ import type {
 
 // ---------- 状态机 ----------
 //
-// 4 题流程：Q1 / Q2（API 动态）→ Q3（题库自抽，答案进报告）→ 触发 startAfterQ3
-// → Q4（题库自抽，答案不入报告，作为缓冲时间）→ /loading
+// 4 题流程：Q1 / Q2（API 动态，答案进报告）→ 触发 startAfterQ2（启动全部报告模块）
+// → Q3 / Q4（题库自抽，答案不入报告，作为等待缓冲时间）→ /loading
 
 type Phase =
   | "init"
@@ -57,20 +57,12 @@ function canUseVoiceRecording(): boolean {
 const GREETING_TEXT =
   "下面进入语音访谈，一共 4 个问题，请按住麦克风作答。";
 
-// 用 Q1/Q2/Q3 答案拼 raw "summary" 文本，作为 /loading 页的兜底
-// Q4 答案不入报告（仅为缓冲时间）
+// 用 Q1/Q2 答案拼 raw "summary" 文本，作为 /loading 页的兜底
+// Q3/Q4 答案不入报告
 function buildRawAnswersSummary(answers: InterviewAnswer[]): string {
   return answers
-    .filter(
-      (a) =>
-        a.questionId === "Q1" ||
-        a.questionId === "Q2" ||
-        a.questionId === "Q3",
-    )
-    .map(
-      (a, i) =>
-        `第${i + 1}问（${a.questionId}）：${a.text || "（未作答）"}`,
-    )
+    .filter((a) => a.questionId === "Q1" || a.questionId === "Q2")
+    .map((a, i) => `第${i + 1}问（${a.questionId}）：${a.text || "（未作答）"}`)
     .join("\n\n");
 }
 
@@ -568,7 +560,7 @@ export default function InterviewPage() {
     router.push("/loading");
   }, [router]);
 
-  // ---------- 触发后台 startAfterQ2（Q2 答完，携带 Q1+Q2 启动 strength/advice） ----------
+  // ---------- 触发后台 startAfterQ2（Q2 答完，携带 Q1+Q2 启动全部报告模块） ----------
 
   const triggerAfterQ2 = useCallback(
     (q1Text: string, q2Text: string) => {
@@ -646,8 +638,7 @@ export default function InterviewPage() {
       setRecognizedText("");
       setTextInput("");
 
-      // Q2 答完（即 currentIndex==1 答完，即将推进到 index=2 的 Q3）
-      // → 触发 startAfterQ2，携带 Q1+Q2 启动 strength / advice
+      // Q2 答完（即 currentIndex==1 答完）→ 触发 startAfterQ2，携带 Q1+Q2 启动全部报告模块
       if (currentIndex === 1) {
         const q1Text =
           newAnswers.find((a) => a.questionId === "Q1")?.text ?? "";

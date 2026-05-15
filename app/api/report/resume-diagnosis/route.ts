@@ -131,12 +131,10 @@ function buildUserPrompt(formData: JobFormData, q1q2: InterviewQ1Q2): string {
 
   const q1 = (q1q2.Q1 ?? "").trim();
   const q2 = (q1q2.Q2 ?? "").trim();
-  const q3 = (q1q2.Q3 ?? "").trim();
-  if (q1 || q2 || q3) {
-    parts.push("", "访谈回答内容（Q1/Q2 为 AI 动态追问，Q3 为通用职业问题）：");
-    if (q1) parts.push(`- Q1（AI 追问）: ${q1}`);
-    if (q2) parts.push(`- Q2（AI 追问）: ${q2}`);
-    if (q3) parts.push(`- Q3（职业问题）: ${q3}`);
+  if (q1 || q2) {
+    parts.push("", "访谈回答内容（AI 动态追问）：");
+    if (q1) parts.push(`- Q1：${q1}`);
+    if (q2) parts.push(`- Q2：${q2}`);
   } else {
     parts.push("", "访谈回答内容：（用户未作答）");
   }

@@ -1,10 +1,10 @@
 /**
  * Report 章节前端并发调度器（5 模块版）
  * ———————————————
- * 触发时序（分两批）：
- *   - quiz 提交后 → startAfterQuiz → 立即启动 overview(1) / positioning(3) / resumeDiagnosis(4)
- *   - interview Q2 答完 → startAfterQ2 → 启动 strength(2) / advice(5)，携带 Q1+Q2 答案
- * loading 页 mount 时调 consumeAll，合并两批 promise。
+ * 触发时序（单批）：
+ *   - interview Q2 答完 → startAfterQ2 → 同时启动全部 5 个模块，携带 Q1+Q2 答案
+ * loading 页 mount 时调 consumeAll 消费结果。
+ * Q3/Q4 答案不入报告，仅作访谈体验缓冲。
  */
 import type {
   Advice,
@@ -39,13 +39,12 @@ export const SECTION_CONFIG: {
   label: string;
   fallback: unknown;
 }[] = [
-  // ---- 批次一：quiz 完成后立即启动（不需要访谈答案） ----
-  { key: "overview",        endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/overview`,          trigger: "afterQuiz", label: "绘制定位总览",   fallback: MOCK_OVERVIEW },
-  { key: "positioning",     endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/positioning`,       trigger: "afterQuiz", label: "推荐适配岗位",   fallback: MOCK_POSITIONING },
-  { key: "resumeDiagnosis", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/resume-diagnosis`,  trigger: "afterQuiz", label: "诊断简历改进点", fallback: MOCK_RESUME_DIAGNOSIS },
-  // ---- 批次二：Q2 答完后启动（携带 Q1+Q2 访谈答案） ----
-  { key: "strength",        endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/strength`,          trigger: "afterQ2",   label: "分析优势能力",   fallback: MOCK_STRENGTH },
-  { key: "advice",          endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/advice`,            trigger: "afterQ2",   label: "梳理行动建议",   fallback: MOCK_ADVICE },
+  // ---- 全部 5 个模块在 Q2 答完后同时启动（携带 Q1+Q2 答案，保证报告逻辑一致） ----
+  { key: "overview",        endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/overview`,          trigger: "afterQ2", label: "绘制定位总览",   fallback: MOCK_OVERVIEW },
+  { key: "positioning",     endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/positioning`,       trigger: "afterQ2", label: "推荐适配岗位",   fallback: MOCK_POSITIONING },
+  { key: "resumeDiagnosis", endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/resume-diagnosis`,  trigger: "afterQ2", label: "诊断简历改进点", fallback: MOCK_RESUME_DIAGNOSIS },
+  { key: "strength",        endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/strength`,          trigger: "afterQ2", label: "分析优势能力",   fallback: MOCK_STRENGTH },
+  { key: "advice",          endpoint: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/advice`,            trigger: "afterQ2", label: "梳理行动建议",   fallback: MOCK_ADVICE },
 ];
 
 export type SectionStatus = "pending" | "loading" | "completed" | "fallback" | "skipped";
@@ -132,9 +131,9 @@ export interface StartPayload {
   interviewQ1Q2?: { Q1?: string; Q2?: string };
 }
 
-/** quiz 提交后调用：启动 overview / positioning / resumeDiagnosis */
-export function startAfterQuiz(payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
-  return startGroup("afterQuiz", payload);
+/** @deprecated no-op：所有模块已改为 afterQ2 触发，保留函数签名避免编译报错 */
+export function startAfterQuiz(_payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
+  return new Map();
 }
 
 /** interview Q2 答完后调用：启动 strength / advice，携带 Q1+Q2 答案 */
