@@ -1,18 +1,23 @@
 /**
- * SJT（情境判断题）评分算法
+ * SJT（情境判断题）评分算法 — 双标签方案
  *
- * 原理：稀疏矩阵得分
- *   - 每题 4 个选项，每个选项覆盖 1-2 个能力维度（weights）
- *   - 用户选择某选项 → 该选项的 weights 累加进对应能力得分
- *   - 每个能力的最终得分 = 用户累计得分 / 理论最高得分 × 100
- *   - 若某题所有选项对某能力权重均为 0 → 该题不计入该能力
- *   - 若整个测试对某能力无任何贡献 → 默认 50（中性）
+ * 题目结构（v0.10）：8 题 = 4 维 × 2 题/维
+ *   - 每题绑定一个 dimension（personality/workstyle/value/direction）
+ *   - 每个选项有 poleValue（0-100，所属维度光谱上的位置）
+ *   - 每个选项还有 weights（6 能力副标签，给 positioning 用）
  *
- * 四维雷达从 6 个能力得分推导：
- *   personality  = avg(communication, collaboration)
- *   workstyle    = avg(execution, learning)
- *   direction    = avg(data, stress)
- *   value        = avg(learning, stress)  // proxy：成长心态 + 韧性 = 职业价值观倾向
+ * ===== 4 维评估（总评雷达）=====
+ * 主路径：按 dimension 分组题目 → 用户选项的 poleValue 平均 → 该维度 score（0-100）
+ *   - 高分 = 偏右极（如外向/灵活/成长/多元），低分 = 偏左极（内敛/按部/稳定/深耕）
+ *   - UI（overview-section）把 score 作为双极光谱上的位置展示
+ * 兜底：旧题（无 dimension/poleValue）退化为 proxy 推导
+ *   personality = avg(communication, collaboration)
+ *   workstyle   = avg(execution, learning)
+ *   direction   = avg(data, stress)
+ *   value       = avg(learning, stress)
+ *
+ * ===== 6 能力评分（positioning 雷达图用）=====
+ * 不变：累加 weights → 每能力得分 = 累计 / 理论最高 × 100
  */
 
 import type { QuizAnswer, QuizQuestion, ScoringResult, AbilityKey, QuizDimension, DimensionScore, AbilityScore } from "./types";
@@ -115,10 +120,35 @@ export function scoreQuiz(
   const abilityMap: Record<string, number> = {};
   for (const a of ability) abilityMap[a.key] = a.score;
 
-  // ===== 四维雷达（从能力分推导）=====
+  // ===== 四维评估 =====
+  // 主路径：按 dimension 分组 → poleValue 平均
+  // 兜底：旧题无 dimension/poleValue → proxy 推导（保持向后兼容）
+  const dimAccum: Record<QuizDimension, { sum: number; count: number }> = {
+    personality: { sum: 0, count: 0 },
+    workstyle: { sum: 0, count: 0 },
+    value: { sum: 0, count: 0 },
+    direction: { sum: 0, count: 0 },
+  };
+  for (const ans of answers) {
+    const q = qMap.get(ans.questionId);
+    if (!q || !q.dimension) continue; // 旧题无 dimension，跳过（走兜底）
+    const selected = q.options.find((o) => o.label === ans.selectedLabel);
+    if (!selected || typeof selected.poleValue !== "number") continue;
+    dimAccum[q.dimension].sum += selected.poleValue;
+    dimAccum[q.dimension].count += 1;
+  }
+
   const fourDim: DimensionScore[] = DIMENSION_ORDER.map((dim) => {
-    const [k1, k2] = DIM_FROM_ABILITY[dim];
-    const score = Math.round((abilityMap[k1] + abilityMap[k2]) / 2);
+    let score: number;
+    const { sum, count } = dimAccum[dim];
+    if (count > 0) {
+      // 主路径：poleValue 平均
+      score = Math.round(sum / count);
+    } else {
+      // 兜底：proxy 推导
+      const [k1, k2] = DIM_FROM_ABILITY[dim];
+      score = Math.round((abilityMap[k1] + abilityMap[k2]) / 2);
+    }
     return {
       dimension: dim,
       name: QUIZ_DIMENSION_NAMES[dim],

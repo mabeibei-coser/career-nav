@@ -43,12 +43,28 @@ export const ABILITY_NAMES: Record<AbilityKey, string> = {
 export interface QuizOption {
   label: "A" | "B" | "C" | "D";
   text: string;
-  weights: Partial<Record<AbilityKey, number>>; // 稀疏矩阵：每个选项覆盖 1-2 个能力维度，值域 0-1
+  /**
+   * 主标签：该选项在所属维度（QuizQuestion.dimension）光谱上的位置。
+   * 0 = 强左极，100 = 强右极，50 = 中性。
+   * 例：性格底色维度（内敛↔外向），poleValue=20 = 偏内敛，poleValue=80 = 偏外向。
+   * 4 维评估的 score 由所属维度的 2 题 poleValue 平均得来。
+   */
+  poleValue?: number;
+  /**
+   * 副标签：该选项体现的 6 能力维度权重（稀疏矩阵，每选项覆盖 1-2 个能力）。
+   * 给 positioning 模块的「核心能力匹配」雷达图用。值域 0-1。
+   */
+  weights: Partial<Record<AbilityKey, number>>;
 }
 
 // 情境判断题
 export interface QuizQuestion {
   id: string;
+  /**
+   * 这道题测哪个 4 维偏好维度（personality/workstyle/value/direction）。
+   * 8 题 = 4 维 × 2 题/维。旧数据可能没有此字段，scoring 会 fallback 到 proxy 推导。
+   */
+  dimension?: QuizDimension;
   text: string; // 情境描述
   options: QuizOption[]; // 固定 4 个选项（A/B/C/D）
 }
