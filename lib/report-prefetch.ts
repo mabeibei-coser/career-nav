@@ -18,7 +18,7 @@ import type { JobFormData } from "@/lib/types";
  * @deprecated career-nav 不在 form 阶段预拉报告。保留 stub 仅为向下兼容现有
  * import；调用此函数无副作用。
  */
-export function startReportPrefetch(_formData: JobFormData): void {
+export function startReportPrefetch(_: JobFormData): void {
   // no-op
 }
 

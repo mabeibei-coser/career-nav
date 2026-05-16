@@ -53,7 +53,6 @@ export function DownloadPDFButton({ report }: Props) {
     return () => {
       cancelledRef.current = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryEpoch, report]);
 
   const onClick = () => {

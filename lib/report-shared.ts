@@ -232,6 +232,12 @@ const SECTION_HARD_TIMEOUT_MS = 50_000;
 export async function callDeepseekJson<T>(
   opts: CallOptions & { timeoutMs?: number }
 ): Promise<T> {
+  const combined = opts.systemPrompt + opts.userPrompt;
+  if (!combined.toLowerCase().includes("json")) {
+    throw new Error(
+      "callDeepseekJson: systemPrompt or userPrompt must include 'json' literal"
+    );
+  }
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),

@@ -61,7 +61,6 @@ export function ExportActions({
     return () => {
       cancelledRef.current = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryEpoch, report]);
 
   const handleDownload = () => {

@@ -87,14 +87,52 @@ export default function ReportPage() {
   const finalizedRef = useRef(false);
 
   // ?pdf=1：Puppeteer 服务端渲染时挂这个 flag，让所有动画关掉
-  const [isPdfMode, setIsPdfMode] = useState(false);
+  // 用 lazy init 读 URL，避免在 effect 里调 setState 触发级联渲染
+  const [isPdfMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("pdf") === "1";
+  });
+
+  // ============ 落 SQLite（幂等：同一 mount 内只发一次 + uuid 跨页/跨刷新去重）============
+  function finalizeOnce(
+    reportData: ReportData,
+    formData: JobFormData,
+    quizAnswers: QuizAnswer[]
+  ) {
+    if (finalizedRef.current) return;
+    // Puppeteer 服务端渲染 PDF 时也会跑到这个 useEffect（带 ?pdf=1），
+    // 它的 sessionStorage 里没有 reportUuid，finalize 会用新 uuid 入库一条多余记录。
+    // 直接在 PDF 模式跳过 finalize。
+    if (
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("pdf") === "1"
+    ) {
+      return;
+    }
+    finalizedRef.current = true;
+    const resumeRef = sessionStorage.getItem("resumeRef") ?? undefined;
+    const resumeFilename = sessionStorage.getItem("resumeFilename") ?? undefined;
+    // 复用 form 页生成的 reportUuid 做幂等。loading 页已用同一 uuid finalize 过，
+    // 此处 fetch 后端会返回 duplicate:true 不重复 INSERT。
+    const reportUuid = sessionStorage.getItem("reportUuid") ?? undefined;
+    fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/finalize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        formData,
+        quizAnswers,
+        reportData,
+        sectionsStatus: {},
+        resumeRef,
+        resumeFilename,
+        uuid: reportUuid,
+      }),
+    }).catch((e) => console.warn("[report-page] finalize failed (ignored):", e));
+  }
 
   // ============ Mount：装配 meta + 启动 5 个 promise 消费 ============
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    const sp = new URLSearchParams(window.location.search);
-    if (sp.get("pdf") === "1") setIsPdfMode(true);
 
     // 1. 必备的三件输入：formData / quizAnswers / interviewQ1Q2
     let formData: JobFormData;
@@ -118,6 +156,7 @@ export default function ReportPage() {
       }
     } catch (e) {
       console.error("[report-page] sessionStorage 读取失败:", e);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBootError("会话数据读取失败，请返回重填");
       return;
     }
@@ -232,43 +271,6 @@ export default function ReportPage() {
       });
     });
   }, [router]);
-
-  // ============ 落 SQLite（幂等：同一 mount 内只发一次 + uuid 跨页/跨刷新去重）============
-  function finalizeOnce(
-    reportData: ReportData,
-    formData: JobFormData,
-    quizAnswers: QuizAnswer[]
-  ) {
-    if (finalizedRef.current) return;
-    // Puppeteer 服务端渲染 PDF 时也会跑到这个 useEffect（带 ?pdf=1），
-    // 它的 sessionStorage 里没有 reportUuid，finalize 会用新 uuid 入库一条多余记录。
-    // 直接在 PDF 模式跳过 finalize。
-    if (
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("pdf") === "1"
-    ) {
-      return;
-    }
-    finalizedRef.current = true;
-    const resumeRef = sessionStorage.getItem("resumeRef") ?? undefined;
-    const resumeFilename = sessionStorage.getItem("resumeFilename") ?? undefined;
-    // 复用 form 页生成的 reportUuid 做幂等。loading 页已用同一 uuid finalize 过，
-    // 此处 fetch 后端会返回 duplicate:true 不重复 INSERT。
-    const reportUuid = sessionStorage.getItem("reportUuid") ?? undefined;
-    fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/finalize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        formData,
-        quizAnswers,
-        reportData,
-        sectionsStatus: {},
-        resumeRef,
-        resumeFilename,
-        uuid: reportUuid,
-      }),
-    }).catch((e) => console.warn("[report-page] finalize failed (ignored):", e));
-  }
 
   // ============ Render ============
   const ctxValue = useMemo(

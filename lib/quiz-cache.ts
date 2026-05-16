@@ -19,7 +19,6 @@ interface CacheEntry {
 
 // TypeScript global 类型声明
 declare global {
-  // eslint-disable-next-line no-var
   var __quizCache: Map<string, CacheEntry> | undefined;
 }
 

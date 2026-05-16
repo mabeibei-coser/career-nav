@@ -84,25 +84,6 @@ describe("scoreQuiz (SJT sparse matrix)", () => {
   });
 
   it("t3: 无任何题贡献某能力时得分 = 50（默认中性）", () => {
-    // 只有 SJT-01，选 B（execution+data），collaboration 无贡献
-    const singleQuestion: QuizQuestion[] = [makeMockQuestions()[0]];
-    const answers: QuizAnswer[] = [{ questionId: "SJT-01", selectedLabel: "B" }];
-    const result = scoreQuiz(answers, singleQuestion);
-
-    const abilityMap = Object.fromEntries(result.ability.map((a) => [a.key, a.score]));
-    // SJT-01 选项里 collaboration 没有最高权重?
-    // A=communication:0.6,collaboration:0, B=communication:0,collaboration:0
-    // C=collaboration:1.0, D=communication:0.9
-    // 所以 max collaboration for SJT-01 = 1.0 (from C)
-    // selected B: weights.collaboration = undefined = 0
-    // achieved=0, maxPossible=1.0 → score = 0? No, score = (0/1.0)*100 = 0
-    // But wait, stress doesn't appear in SJT-01 options at all except D (stress:0.5)
-    // Actually let me recalculate. D has stress:0.5, so maxPossible.stress = 0.5
-    // Selected B has stress:0 → achieved=0/0.5*100 = 0. Not 50.
-    // The 50 default only applies if NO option in ANY question contributes to the ability
-    // In this case stress DOES have max=0.5, so it's not "no contribution"
-    // Let me test collaboration specifically with questions where NO option has collaboration weight
-
     const noCollabQuestions: QuizQuestion[] = [
       {
         id: "NC-01",

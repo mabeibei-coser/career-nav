@@ -71,7 +71,7 @@ function clearSessionMark() {
 // ========== Public API ==========
 
 /** @deprecated no-op */
-export function startAfterQuiz(_payload: StartPayload): void {
+export function startAfterQuiz(_: StartPayload): void {
   // no-op
 }
 
@@ -98,7 +98,7 @@ export function startAfterQ2(payload: StartPayload): void {
 }
 
 /** @deprecated no-op */
-export function startAfterQ3(_payload: StartPayload): void {
+export function startAfterQ3(_: StartPayload): void {
   // no-op
 }
 

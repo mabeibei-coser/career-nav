@@ -435,7 +435,7 @@ export default function QuizPage() {
         <p className="text-center text-xs text-[var(--muted-foreground)] mt-6 leading-relaxed">
           测评无对错，选最符合你实际的做法即可；
           <br className="sm:hidden" />
-          可点"上一题"返回修改。
+          可点&ldquo;上一题&rdquo;返回修改。
           {formData?.resumeFileName && (
             <span className="block mt-1">已识别简历：{formData.resumeFileName}</span>
           )}

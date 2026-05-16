@@ -157,17 +157,17 @@ export function clientFireGenerate(payload: StartPayload): Promise<unknown> {
 }
 
 /** @deprecated no-op：保留函数签名供历史调用点 import 不破 */
-export function startAfterQuiz(_payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
+export function startAfterQuiz(_: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
   return new Map();
 }
 
 /** @deprecated bg-runner 现在直接调 clientFireGenerate；此函数作为 no-op 保留 */
-export function startAfterQ2(_payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
+export function startAfterQ2(_: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
   return new Map();
 }
 
 /** @deprecated no-op */
-export function startAfterQ3(_payload: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
+export function startAfterQ3(_: StartPayload): Map<ReportSectionKey, Promise<unknown>> {
   return new Map();
 }
 
