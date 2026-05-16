@@ -240,6 +240,15 @@ export default function ReportPage() {
     quizAnswers: QuizAnswer[]
   ) {
     if (finalizedRef.current) return;
+    // Puppeteer 服务端渲染 PDF 时也会跑到这个 useEffect（带 ?pdf=1），
+    // 它的 sessionStorage 里没有 reportUuid，finalize 会用新 uuid 入库一条多余记录。
+    // 直接在 PDF 模式跳过 finalize。
+    if (
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("pdf") === "1"
+    ) {
+      return;
+    }
     finalizedRef.current = true;
     const resumeRef = sessionStorage.getItem("resumeRef") ?? undefined;
     const resumeFilename = sessionStorage.getItem("resumeFilename") ?? undefined;
