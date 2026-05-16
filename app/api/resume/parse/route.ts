@@ -30,6 +30,62 @@ function cleanText(raw: string): string {
     .trim();
 }
 
+/**
+ * 启发式从简历文本提取姓名。仅用于 admin 后台咨询师跟进展示，
+ * 提取失败返回 null（前端不显示，不报错）。
+ *
+ * 覆盖模式：
+ *   1) "姓名：张三" / "Name: Zhang San" / "姓 名 : 张三"
+ *   2) 首行独立的 2-4 字中文（典型简历开头）
+ *   3) 首行开头 2-4 字中文 + 分隔符（| / · / 空格 + 性别 / 年龄）
+ */
+function extractNameFromResume(text: string): string | null {
+  if (!text) return null;
+  const head = text.slice(0, 500);
+
+  // 模式 1: 有"姓名"标签的明确字段
+  const labeled = head.match(
+    /(?:姓\s*名|Name|name|NAME)\s*[:：]\s*([一-龥·]{2,8}|[A-Za-z][A-Za-z\s]{1,30}[A-Za-z])/
+  );
+  if (labeled?.[1]) {
+    const candidate = labeled[1].trim();
+    if (candidate.length >= 2) return candidate;
+  }
+
+  // 模式 2 & 3: 检查前 5 行
+  const lines = head
+    .split(/[\r\n]+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const blacklist = new Set([
+    "个人简历",
+    "求职简历",
+    "简历",
+    "中文简历",
+    "英文简历",
+    "个人资料",
+    "求职意向",
+    "应聘简历",
+    "基本信息",
+    "个人信息",
+    "联系方式",
+  ]);
+
+  for (const line of lines.slice(0, 5)) {
+    // 2: 整行只有 2-4 字中文 = 姓名
+    if (/^[一-龥·]{2,4}$/.test(line) && !blacklist.has(line)) {
+      return line;
+    }
+    // 3: 行开头 2-4 字中文 + 分隔符/性别/年龄/出生年
+    const m = line.match(
+      /^([一-龥·]{2,4})(?:\s*[|·•｜/、]\s*|\s+(?:男|女|Male|Female|\d{2,3}\s*岁|\d{4}\.))/
+    );
+    if (m && !blacklist.has(m[1])) return m[1];
+  }
+
+  return null;
+}
+
 function truncate(text: string, maxChars = 8000): string {
   if (text.length <= maxChars) return text;
   const headLen = 5000;
@@ -68,6 +124,7 @@ export async function POST(req: NextRequest) {
       truncated: false,
       resumeRef: "e2e-mock-resume-ref",
       resumeFilename: "test-resume.pdf",
+      extractedName: null,
     });
   }
   try {
@@ -126,6 +183,8 @@ export async function POST(req: NextRequest) {
     }
 
     const text = truncate(cleaned);
+    // 从原始清洗后的文本（非 truncate 截断版）的开头提取姓名
+    const extractedName = extractNameFromResume(cleaned);
 
     const tempId = randomUUID();
     const cleanName = sanitizeFilename(file.name);
@@ -140,6 +199,7 @@ export async function POST(req: NextRequest) {
       truncated: cleaned.length > text.length,
       resumeRef: tempId,
       resumeFilename: cleanName,
+      extractedName,
     });
   } catch (error: unknown) {
     console.error("Resume parse error:", error);

@@ -15,6 +15,8 @@ export interface FileUploadValue {
   truncated?: boolean;
   resumeRef?: string;
   resumeFilename?: string;
+  /** 服务端从简历正文启发式抽取的姓名；提取不到为 null，前端不展示 */
+  extractedName?: string | null;
 }
 
 export interface FileUploadProps {
@@ -98,6 +100,7 @@ export function FileUpload({
         truncated: data.truncated,
         resumeRef: data.resumeRef,
         resumeFilename: data.resumeFilename,
+        extractedName: data.extractedName ?? null,
       };
       setStatus("success");
       onChange?.(next);

@@ -33,7 +33,6 @@ const formSchema = z.object({
   identity: z.enum(["recent_grad", "young_unemployed", "general_unemployed"], {
     error: "请选择当前身份",
   }),
-  name: z.string().min(1, "请输入您的姓名").max(30, "姓名过长"),
   targetPosition: z.string().max(60, "岗位名称过长").optional(),
   education: z.string().min(1, "请选择最高学历"),
   workYears: z.string().min(1, "请选择工作年限"),
@@ -48,7 +47,6 @@ function getSavedDefaults(): Partial<FormValues> & {
 } {
   const empty = {
     identity: undefined,
-    name: "",
     targetPosition: "",
     education: "",
     workYears: "",
@@ -61,13 +59,16 @@ function getSavedDefaults(): Partial<FormValues> & {
     const parsed = JSON.parse(saved) as Partial<JobFormData>;
     return {
       identity: parsed.identity,
-      name: parsed.name ?? "",
       targetPosition: parsed.targetPosition ?? "",
       education: parsed.education ?? "",
       workYears: parsed.workYears ?? "",
       resume:
         parsed.resumeText && parsed.resumeFileName
-          ? { fileName: parsed.resumeFileName, text: parsed.resumeText }
+          ? {
+              fileName: parsed.resumeFileName,
+              text: parsed.resumeText,
+              extractedName: parsed.name ?? null,
+            }
           : null,
     };
   } catch {
@@ -92,7 +93,6 @@ export default function HomePage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       identity: saved.identity,
-      name: saved.name ?? "",
       targetPosition: saved.targetPosition ?? "",
       education: saved.education ?? "",
       workYears: saved.workYears ?? "",
@@ -111,9 +111,12 @@ export default function HomePage() {
     }
     setIsSubmitting(true);
     blessAudio();
+    // 姓名从简历正文启发式抽取（resume parse API 返回 extractedName）。
+    // 提取失败为 null/undefined，admin 列表显示 "—"，不影响主流程。
+    const extractedName = resume?.extractedName?.trim() || undefined;
     const payload: JobFormData = {
       identity: data.identity as UserIdentity,
-      name: data.name.trim(),
+      name: extractedName,
       targetPosition: data.targetPosition ?? "",
       education: data.education,
       workYears: data.workYears,
@@ -283,49 +286,7 @@ export default function HomePage() {
             </div>
           </motion.div>
 
-          {/* 2. 姓名 —— 必填，用于咨询师后续跟进 */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.14, ease: cubicEase }}
-          >
-            <div className="glass-card rounded-xl p-4 sm:p-5">
-              <Label
-                htmlFor="name"
-                className="flex items-center gap-2 text-sm font-medium text-[var(--navy-800)] mb-3"
-              >
-                <span className="text-[var(--blue-500)]">
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <circle cx="10" cy="7" r="3" stroke="currentColor" strokeWidth="1.5" />
-                    <path d="M3.5 17c0-3.59 2.91-6.5 6.5-6.5s6.5 2.91 6.5 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </span>
-                您的姓名
-              </Label>
-              <Input
-                id="name"
-                placeholder="例如：张小明"
-                autoComplete="name"
-                {...register("name")}
-                className="h-12 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all placeholder:text-[var(--muted-foreground)]/50"
-              />
-              {errors.name && (
-                <motion.p
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-xs text-red-500 mt-2 flex items-center gap-1"
-                >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" />
-                    <path d="M6 4v2.5M6 8h.005" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                  </svg>
-                  {errors.name.message}
-                </motion.p>
-              )}
-            </div>
-          </motion.div>
-
-          {/* 3. 目标岗位 —— 自由文本 */}
+          {/* 2. 目标岗位 —— 自由文本 */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
