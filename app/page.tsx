@@ -68,6 +68,7 @@ function getSavedDefaults(): Partial<FormValues> & {
               fileName: parsed.resumeFileName,
               text: parsed.resumeText,
               extractedName: parsed.name ?? null,
+              extractedPhone: parsed.phone ?? null,
             }
           : null,
     };
@@ -111,12 +112,14 @@ export default function HomePage() {
     }
     setIsSubmitting(true);
     blessAudio();
-    // 姓名从简历正文启发式抽取（resume parse API 返回 extractedName）。
+    // 姓名 / 手机号从简历正文启发式抽取（resume parse API 返回 extractedName / extractedPhone）。
     // 提取失败为 null/undefined，admin 列表显示 "—"，不影响主流程。
     const extractedName = resume?.extractedName?.trim() || undefined;
+    const extractedPhone = resume?.extractedPhone?.trim() || undefined;
     const payload: JobFormData = {
       identity: data.identity as UserIdentity,
       name: extractedName,
+      phone: extractedPhone,
       targetPosition: data.targetPosition ?? "",
       education: data.education,
       workYears: data.workYears,

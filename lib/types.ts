@@ -4,8 +4,10 @@ export type UserIdentity = "recent_grad" | "young_unemployed" | "general_unemplo
 
 export interface JobFormData {
   identity: UserIdentity;
-  /** 用户填写的真实姓名（admin 后台展示用，前端不显示在报告里） */
+  /** 从简历正文启发式抽取的姓名（admin 后台展示用） */
   name?: string;
+  /** 从简历正文启发式抽取的中国大陆手机号（admin 后台展示用） */
+  phone?: string;
   targetPosition: string;
   education: string;
   workYears: string;

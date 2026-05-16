@@ -17,6 +17,8 @@ export interface FileUploadValue {
   resumeFilename?: string;
   /** 服务端从简历正文启发式抽取的姓名；提取不到为 null，前端不展示 */
   extractedName?: string | null;
+  /** 服务端从简历正文启发式抽取的手机号；提取不到为 null */
+  extractedPhone?: string | null;
 }
 
 export interface FileUploadProps {
@@ -101,6 +103,7 @@ export function FileUpload({
         resumeRef: data.resumeRef,
         resumeFilename: data.resumeFilename,
         extractedName: data.extractedName ?? null,
+        extractedPhone: data.extractedPhone ?? null,
       };
       setStatus("success");
       onChange?.(next);

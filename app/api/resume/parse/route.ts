@@ -52,11 +52,7 @@ function extractNameFromResume(text: string): string | null {
     if (candidate.length >= 2) return candidate;
   }
 
-  // 模式 2 & 3: 检查前 5 行
-  const lines = head
-    .split(/[\r\n]+/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+  // 黑名单：常见简历章节标题、通用词，避免被识别成姓名
   const blacklist = new Set([
     "个人简历",
     "求职简历",
@@ -69,20 +65,63 @@ function extractNameFromResume(text: string): string | null {
     "基本信息",
     "个人信息",
     "联系方式",
+    "工作经验",
+    "工作经历",
+    "项目经验",
+    "项目经历",
+    "教育背景",
+    "教育经历",
+    "学习经历",
+    "技能特长",
+    "自我评价",
+    "自我介绍",
+    "兴趣爱好",
+    "荣誉奖项",
+    "实习经历",
+    "实习经验",
+    "校园经历",
+    "学校经历",
+    "证书技能",
+    "专业技能",
+    "求职目标",
+    "意向岗位",
   ]);
+
+  // 模式 2 & 3: 检查前 5 行
+  const lines = head
+    .split(/[\r\n]+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
 
   for (const line of lines.slice(0, 5)) {
     // 2: 整行只有 2-4 字中文 = 姓名
     if (/^[一-龥·]{2,4}$/.test(line) && !blacklist.has(line)) {
       return line;
     }
-    // 3: 行开头 2-4 字中文 + 分隔符/性别/年龄/出生年
+    // 3: 行开头 2-4 字中文，之后跟分隔符（含 -、—、--、—— / 性别 / 年龄 / 4 位年份）
+    //    覆盖如 "宗婷--嘉里大通" / "张三 | 男" / "李四（28岁）" 等
     const m = line.match(
-      /^([一-龥·]{2,4})(?:\s*[|·•｜/、]\s*|\s+(?:男|女|Male|Female|\d{2,3}\s*岁|\d{4}\.))/
+      /^([一-龥·]{2,4})(?:\s*[-–——|·•｜/、_,，:：()（）【】\[\]]+|\s+(?:男|女|Male|Female|\d{2,3}\s*岁|\d{4}))/
     );
     if (m && !blacklist.has(m[1])) return m[1];
   }
 
+  return null;
+}
+
+/**
+ * 启发式从简历文本提取中国大陆手机号。提取失败返回 null。
+ * 规则：连续 11 位以 1[3-9] 开头的数字段（含分隔符），前后必须是非数字边界。
+ */
+function extractPhoneFromResume(text: string): string | null {
+  if (!text) return null;
+  const head = text.slice(0, 2000);
+  // 1) 紧凑型 11 位（最常见："电话：13812345678"）
+  const m = head.match(/(?:^|[^\d])(1[3-9]\d{9})(?:[^\d]|$)/);
+  if (m?.[1]) return m[1];
+  // 2) 带 - 或空格分隔的 3-4-4 格式（"138-1234-5678" / "138 1234 5678"）
+  const m2 = head.match(/(?:^|[^\d])(1[3-9]\d)[\s\-](\d{4})[\s\-](\d{4})(?:[^\d]|$)/);
+  if (m2) return `${m2[1]}${m2[2]}${m2[3]}`;
   return null;
 }
 
@@ -125,6 +164,7 @@ export async function POST(req: NextRequest) {
       resumeRef: "e2e-mock-resume-ref",
       resumeFilename: "test-resume.pdf",
       extractedName: null,
+      extractedPhone: null,
     });
   }
   try {
@@ -183,8 +223,9 @@ export async function POST(req: NextRequest) {
     }
 
     const text = truncate(cleaned);
-    // 从原始清洗后的文本（非 truncate 截断版）的开头提取姓名
+    // 从原始清洗后的文本（非 truncate 截断版）的开头提取姓名、手机号
     const extractedName = extractNameFromResume(cleaned);
+    const extractedPhone = extractPhoneFromResume(cleaned);
 
     const tempId = randomUUID();
     const cleanName = sanitizeFilename(file.name);
@@ -200,6 +241,7 @@ export async function POST(req: NextRequest) {
       resumeRef: tempId,
       resumeFilename: cleanName,
       extractedName,
+      extractedPhone,
     });
   } catch (error: unknown) {
     console.error("Resume parse error:", error);
