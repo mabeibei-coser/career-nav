@@ -233,7 +233,7 @@ export default function ReportPage() {
     });
   }, [router]);
 
-  // ============ 落 SQLite（幂等：同一 mount 内只发一次）============
+  // ============ 落 SQLite（幂等：同一 mount 内只发一次 + uuid 跨页/跨刷新去重）============
   function finalizeOnce(
     reportData: ReportData,
     formData: JobFormData,
@@ -243,6 +243,9 @@ export default function ReportPage() {
     finalizedRef.current = true;
     const resumeRef = sessionStorage.getItem("resumeRef") ?? undefined;
     const resumeFilename = sessionStorage.getItem("resumeFilename") ?? undefined;
+    // 复用 form 页生成的 reportUuid 做幂等。loading 页已用同一 uuid finalize 过，
+    // 此处 fetch 后端会返回 duplicate:true 不重复 INSERT。
+    const reportUuid = sessionStorage.getItem("reportUuid") ?? undefined;
     fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/finalize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -253,6 +256,7 @@ export default function ReportPage() {
         sectionsStatus: {},
         resumeRef,
         resumeFilename,
+        uuid: reportUuid,
       }),
     }).catch((e) => console.warn("[report-page] finalize failed (ignored):", e));
   }

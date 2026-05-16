@@ -475,6 +475,7 @@ export default function LoadingPage() {
           // sessionStorage 配额满：仍继续跳转，report 页会走 bg-runner 内存路径
         }
         // finalize 落库（失败不阻塞跳转）
+        // 带上 form 阶段生成的 reportUuid 做幂等：loading 页 + report 页多次 finalize 只入库一次
         fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/finalize`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -487,6 +488,7 @@ export default function LoadingPage() {
             resumeRef: sessionStorage.getItem("resumeRef") ?? undefined,
             resumeFilename:
               sessionStorage.getItem("resumeFilename") ?? undefined,
+            uuid: sessionStorage.getItem("reportUuid") ?? undefined,
           }),
         }).catch((e) => console.warn("[finalize] failed (ignored):", e));
 

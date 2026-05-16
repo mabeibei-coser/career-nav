@@ -29,6 +29,9 @@ interface FinalizeRequestBody {
   durationMs?: number;
   resumeRef?: string;
   resumeFilename?: string;
+  /** 客户端幂等 key：form 页生成并存 sessionStorage，loading/report 页 finalize 都用同一个，
+   *  防止同一次走完流程在 admin 出现多条记录。同 uuid 第二次请求直接返回首次结果。 */
+  uuid?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -44,6 +47,7 @@ export async function POST(req: NextRequest) {
       durationMs,
       resumeRef,
       resumeFilename,
+      uuid: clientUuid,
     } = body ?? {};
 
     if (!formData?.identity) {
@@ -55,6 +59,22 @@ export async function POST(req: NextRequest) {
 
     const db = getDb();
 
+    // 幂等保护：如果客户端传了 uuid 且该 uuid 已在 reports 表里 → 直接返回首次结果
+    // 防止 loading 页 + report 页 + React 双 mount 多次 fetch finalize 出现多条记录
+    if (clientUuid) {
+      const existing = db
+        .prepare("SELECT id, uuid FROM reports WHERE uuid = ?")
+        .get(clientUuid) as { id: number; uuid: string } | undefined;
+      if (existing) {
+        return NextResponse.json({
+          id: existing.uuid,
+          url: `/report/${existing.uuid}`,
+          reportId: existing.id,
+          duplicate: true,
+        });
+      }
+    }
+
     // scoring / interviewQ1Q2 优先走显式入参，否则从 reportData.meta 兜底
     const finalScoring: ScoringResult | undefined =
       scoring ?? reportData.meta?.scoring;
@@ -65,7 +85,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "缺少 scoring" }, { status: 400 });
     }
 
-    const uuid = randomUUID();
+    // 优先用客户端传的幂等 uuid；没传就生成新的
+    const uuid = clientUuid || randomUUID();
     const createdAt = Date.now();
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
@@ -110,7 +131,28 @@ export async function POST(req: NextRequest) {
       return result.lastInsertRowid as number;
     });
 
-    const reportRowId = txn();
+    // 并发场景兜底：前置 SELECT 通过但 INSERT 时被并发请求抢先插入了同 uuid。
+    // SQLite UNIQUE 约束会抛错，捕获后回查已存在行返回。
+    let reportRowId: number;
+    try {
+      reportRowId = txn();
+    } catch (e) {
+      const isUniqueError = /UNIQUE constraint failed/i.test(String(e));
+      if (isUniqueError && clientUuid) {
+        const existing = db
+          .prepare("SELECT id, uuid FROM reports WHERE uuid = ?")
+          .get(clientUuid) as { id: number; uuid: string } | undefined;
+        if (existing) {
+          return NextResponse.json({
+            id: existing.uuid,
+            url: `/report/${existing.uuid}`,
+            reportId: existing.id,
+            duplicate: true,
+          });
+        }
+      }
+      throw e;
+    }
 
     // 把简历从 temp 搬到永久目录（按 uuid 归档）
     // 注：简历是用户上传的原始文件，仍需磁盘存（区别于 report_json 是生成内容）
