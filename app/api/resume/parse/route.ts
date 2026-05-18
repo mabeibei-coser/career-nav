@@ -85,6 +85,10 @@ function extractNameFromResume(text: string): string | null {
     "专业技能",
     "求职目标",
     "意向岗位",
+    "投递职位",
+    "投递岗位",
+    "应聘职位",
+    "应聘岗位",
   ]);
 
   // 模式 2 & 3: 检查前 5 行
