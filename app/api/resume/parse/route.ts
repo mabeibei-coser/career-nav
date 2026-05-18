@@ -31,6 +31,38 @@ function cleanText(raw: string): string {
 }
 
 /**
+ * 启发式从简历文件名提取姓名。招聘平台（智联/猎聘/拉勾）下载的简历多数命名为
+ * "<姓名>-<其他元数据>.pdf"，第一个分隔符前就是姓名。精度比正文启发式高。
+ *
+ * 提取失败返回 null。
+ */
+function extractNameFromFilename(fileName: string): string | null {
+  if (!fileName) return null;
+  // 剥扩展名 + NFKC 归一化（防文件名也有 CJK Radical 字符）
+  const stem = fileName.replace(/\.(pdf|docx?|txt)$/i, "").normalize("NFKC");
+  const tokens = stem.split(/[-_\s()（）.·•|]+/).filter(Boolean);
+  const blacklist = new Set([
+    "简历",
+    "个人简历",
+    "求职简历",
+    "我的简历",
+    "应届生",
+    "毕业生",
+    "求职者",
+  ]);
+  for (const t of tokens) {
+    // 黑名单先看原 token（防"个人简历"剥"简历"后退化为"个人"漏判）
+    if (blacklist.has(t)) continue;
+    // 剥常见后缀："张三简历" → "张三"
+    const candidate = t.replace(/(?:的)?简历$/i, "");
+    if (!/^[一-龥·]{2,15}$/.test(candidate)) continue;
+    if (blacklist.has(candidate)) continue;
+    return candidate;
+  }
+  return null;
+}
+
+/**
  * 启发式从简历文本提取姓名。仅用于 admin 后台咨询师跟进展示，
  * 提取失败返回 null（前端不显示，不报错）。
  *
@@ -41,7 +73,8 @@ function cleanText(raw: string): string {
  */
 function extractNameFromResume(text: string): string | null {
   if (!text) return null;
-  const head = text.slice(0, 500);
+  // PDF 解析常出现 CJK 部首字符（⽊ U+2F0A vs 木 U+6728），NFKC 归一化还原
+  const head = text.slice(0, 500).normalize("NFKC");
 
   // 模式 1: 有"姓名"标签的明确字段
   const labeled = head.match(
@@ -227,8 +260,9 @@ export async function POST(req: NextRequest) {
     }
 
     const text = truncate(cleaned);
-    // 从原始清洗后的文本（非 truncate 截断版）的开头提取姓名、手机号
-    const extractedName = extractNameFromResume(cleaned);
+    // 姓名优先用文件名启发式（命中率最高），fallback 到正文启发式
+    const extractedName =
+      extractNameFromFilename(file.name) ?? extractNameFromResume(cleaned);
     const extractedPhone = extractPhoneFromResume(cleaned);
 
     const tempId = randomUUID();
