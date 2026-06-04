@@ -30,9 +30,14 @@ import { blessAudio } from "@/lib/audio-bless";
 import type { JobFormData, UserIdentity } from "@/lib/types";
 
 const formSchema = z.object({
-  identity: z.enum(["recent_grad", "young_unemployed", "general_unemployed"], {
+  identity: z.enum(["recent_grad", "general_job_seeker"], {
     error: "请选择当前身份",
   }),
+  // 出生年月：<input type="month"> 返回 "YYYY-MM" 格式
+  birthDate: z
+    .string()
+    .min(1, "请选择出生年月")
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "请选择有效的出生年月"),
   targetPosition: z.string().max(60, "岗位名称过长").optional(),
   education: z.string().min(1, "请选择最高学历"),
   workYears: z.string().min(1, "请选择工作年限"),
@@ -47,6 +52,7 @@ function getSavedDefaults(): Partial<FormValues> & {
 } {
   const empty = {
     identity: undefined,
+    birthDate: "",
     targetPosition: "",
     education: "",
     workYears: "",
@@ -57,8 +63,14 @@ function getSavedDefaults(): Partial<FormValues> & {
     const saved = sessionStorage.getItem("formData");
     if (!saved) return empty;
     const parsed = JSON.parse(saved) as Partial<JobFormData>;
+    // 老 sessionStorage 里的 35 岁两挡身份已下线，丢弃避免 zod 报错
+    const identity =
+      parsed.identity === "recent_grad" || parsed.identity === "general_job_seeker"
+        ? parsed.identity
+        : undefined;
     return {
-      identity: parsed.identity,
+      identity,
+      birthDate: parsed.birthDate ?? "",
       targetPosition: parsed.targetPosition ?? "",
       education: parsed.education ?? "",
       workYears: parsed.workYears ?? "",
@@ -94,6 +106,7 @@ export default function HomePage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       identity: saved.identity,
+      birthDate: saved.birthDate ?? "",
       targetPosition: saved.targetPosition ?? "",
       education: saved.education ?? "",
       workYears: saved.workYears ?? "",
@@ -120,6 +133,7 @@ export default function HomePage() {
       identity: data.identity as UserIdentity,
       name: extractedName,
       phone: extractedPhone,
+      birthDate: data.birthDate,
       targetPosition: data.targetPosition ?? "",
       education: data.education,
       workYears: data.workYears,
@@ -289,7 +303,50 @@ export default function HomePage() {
             </div>
           </motion.div>
 
-          {/* 2. 目标岗位 —— 自由文本 */}
+          {/* 2. 出生年月 —— month input */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.14, ease: cubicEase }}
+          >
+            <div className="glass-card rounded-xl p-4 sm:p-5">
+              <Label
+                htmlFor="birthDate"
+                className="flex items-center gap-2 text-sm font-medium text-[var(--navy-800)] mb-3"
+              >
+                <span className="text-[var(--blue-500)]">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <rect x="3" y="4.5" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M3 8h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    <path d="M7 3v3M13 3v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </span>
+                出生年月
+                <span className="text-red-400 text-xs">*</span>
+              </Label>
+              <Input
+                id="birthDate"
+                type="month"
+                {...register("birthDate")}
+                className="h-12 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all"
+              />
+              {errors.birthDate && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xs text-red-500 mt-2 flex items-center gap-1"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M6 4v2.5M6 8h.005" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  {errors.birthDate.message}
+                </motion.p>
+              )}
+            </div>
+          </motion.div>
+
+          {/* 3. 目标岗位 —— 自由文本 */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}

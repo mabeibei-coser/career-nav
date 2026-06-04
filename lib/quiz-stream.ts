@@ -180,11 +180,12 @@ const FALLBACK_QUESTIONS_OLDER: QuizQuestion[] = [
   },
 ];
 
-/** 根据身份返回兜底题；35+ 用去精英化版，其他用通用版 */
+/** 根据身份返回兜底题；35+（含 2026-06 起新填的「一般社会求职者」）用去精英化版，其他用通用版 */
 export function getFallbackQuestionsForIdentity(
   identity: JobFormData["identity"] | undefined,
 ): QuizQuestion[] {
-  if (identity === "general_unemployed") return FALLBACK_QUESTIONS_OLDER;
+  // 2026-06：新身份 general_job_seeker 也走去精英化版（最稳的画像，避免假设用户在大厂工作）
+  if (identity === "general_unemployed" || identity === "general_job_seeker") return FALLBACK_QUESTIONS_OLDER;
   return FALLBACK_QUESTIONS;
 }
 
@@ -280,13 +281,16 @@ export function buildQuizUserPrompt(formData: JobFormData, count = 8): string {
       ? "应届毕业生（失业，求第一份工作）"
       : formData.identity === "young_unemployed"
         ? "35 岁以下失业求职者"
-        : "35 岁以上失业求职者";
+        : formData.identity === "general_unemployed"
+          ? "35 岁以上失业求职者"
+          : "一般社会求职者（含各年龄段，年龄见下方出生年月）";
 
   const hasResume = !!formData.resumeText?.trim();
 
   const lines = [
     "求职者背景：",
     `- 身份：${identityLabel}`,
+    ...(formData.birthDate ? [`- 出生年月：${formData.birthDate}`] : []),
     `- 学历：${formData.education ?? "未知"}`,
     `- 工作年限：${formData.workYears ?? "未知"}`,
     `- 意向岗位：${formData.targetPosition?.trim() || "未指定"}`,

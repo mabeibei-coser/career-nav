@@ -28,6 +28,7 @@ test.describe("完整流程：form → quiz → interview → report", () => {
     await form.goto();
     await form.fill({
       identity: "recent_grad",
+      birthDate: "2002-06",
       targetPosition: "客户服务专员",
       education: "bachelor",
       workYears: "lt1",
@@ -53,7 +54,7 @@ test.describe("完整流程：form → quiz → interview → report", () => {
     await report.assertRadarsPresent();
   });
 
-  test("general_unemployed 身份跑通", async ({ page, isMobile }) => {
+  test("general_job_seeker 身份跑通（含出生年月）", async ({ page, isMobile }) => {
     test.setTimeout(isMobile ? 240_000 : 180_000);
 
     const form = new FormPage(page);
@@ -64,7 +65,8 @@ test.describe("完整流程：form → quiz → interview → report", () => {
 
     await form.goto();
     await form.fill({
-      identity: "general_unemployed",
+      identity: "general_job_seeker",
+      birthDate: "1985-03",
       targetPosition: "行政人事助理",
       education: "junior_college",
       workYears: "1to3",
@@ -101,6 +103,7 @@ test.describe("完整流程：form → quiz → interview → report", () => {
     // 显式不传 resumeFileName
     await form.fill({
       identity: "recent_grad",
+      birthDate: "2001-09",
       targetPosition: "数据分析师",
       education: "master_plus",
       workYears: "lt1",

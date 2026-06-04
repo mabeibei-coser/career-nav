@@ -1,9 +1,8 @@
-import type { UserIdentity } from "./types";
+import type { ActiveUserIdentity } from "./types";
 
-export const USER_IDENTITY_OPTIONS: { value: UserIdentity; label: string; description: string }[] = [
+export const USER_IDENTITY_OPTIONS: { value: ActiveUserIdentity; label: string; description: string }[] = [
   { value: "recent_grad", label: "应届毕业生", description: "毕业后尚未找到第一份工作" },
-  { value: "young_unemployed", label: "35岁以下求职者", description: "35周岁以下，有工作经历，正在求职中" },
-  { value: "general_unemployed", label: "35岁以上求职者", description: "35周岁及以上，有工作经历，正在求职中" },
+  { value: "general_job_seeker", label: "一般社会求职者", description: "有工作经历，正在求职中" },
 ];
 
 export const EDUCATION_OPTIONS = [

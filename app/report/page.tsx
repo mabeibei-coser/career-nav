@@ -363,7 +363,9 @@ export default function ReportPage() {
       ? "应届毕业生"
       : meta.formData.identity === "young_unemployed"
         ? "35岁以下求职者"
-        : "35岁以上求职者";
+        : meta.formData.identity === "general_unemployed"
+          ? "35岁以上求职者"
+          : "一般社会求职者";
 
   // 装配 ReportData（用于 ExportActions / PDF 导出，可能含 mock）
   const composedReport: ReportData = {

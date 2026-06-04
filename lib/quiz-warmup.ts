@@ -11,10 +11,11 @@ import { generateSJTQuestions } from "@/lib/quiz-generate";
 import { makeQuizCacheKey, getFromQuizCache, setToQuizCache } from "@/lib/quiz-cache";
 import type { JobFormData } from "@/lib/types";
 
+// 2026-06 起新填用户仅 recent_grad / general_job_seeker；
+// young_unemployed / general_unemployed 是老 enum，不再预热（老用户 sessionStorage 被清掉，不会命中）
 const IDENTITIES: Array<JobFormData["identity"]> = [
   "recent_grad",
-  "young_unemployed",
-  "general_unemployed",
+  "general_job_seeker",
 ];
 
 const EDUCATIONS: string[] = [

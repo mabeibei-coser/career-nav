@@ -201,7 +201,8 @@ export const MOCK_ADVICE: Advice = {
 
 // 元信息 mock：构造一份完整的 ReportMeta
 const MOCK_FORM_DATA: JobFormData = {
-  identity: "general_unemployed",
+  identity: "general_job_seeker",
+  birthDate: "1990-06",
   targetPosition: "客户服务专员",
   education: "本科",
   workYears: "1-3 年",

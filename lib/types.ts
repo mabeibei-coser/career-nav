@@ -1,6 +1,16 @@
 // ========== 表单输入类型 ==========
 
-export type UserIdentity = "recent_grad" | "young_unemployed" | "general_unemployed";
+/**
+ * 包含新老两套 enum 的宽 union — DB / prompt 分支需要识别全部值。
+ * 表单当前只让填 recent_grad / general_job_seeker，见 ActiveUserIdentity。
+ */
+export type UserIdentity =
+  | "recent_grad"
+  | "general_job_seeker"
+  | "young_unemployed"
+  | "general_unemployed";
+
+export type ActiveUserIdentity = "recent_grad" | "general_job_seeker";
 
 export interface JobFormData {
   identity: UserIdentity;
@@ -8,6 +18,8 @@ export interface JobFormData {
   name?: string;
   /** 从简历正文启发式抽取的中国大陆手机号（admin 后台展示用） */
   phone?: string;
+  /** 出生年月，格式 "YYYY-MM"（来自 <input type="month">）；admin 后台据此算年龄。 */
+  birthDate?: string;
   targetPosition: string;
   education: string;
   workYears: string;

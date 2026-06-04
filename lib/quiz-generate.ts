@@ -6,7 +6,7 @@
  * → 输出 tokens 从 ~2500 降到 ~900，完成时间从 >25s 降到 ~6-10s
  * → 数值权重由服务端模板映射：primary=1.0，secondary=0.5
  */
-import { callWithFallback } from "@/lib/report-shared";
+import { callWithFallback, identityLabelOf } from "@/lib/report-shared";
 import type { JobFormData, QuizQuestion, AbilityKey } from "@/lib/types";
 
 // ===== 7 道兜底 SJT 题（LLM 失败 / E2E Mock 时使用）=====
@@ -169,14 +169,12 @@ function normalizeSimpleBank(data: LLMSimpleBank): QuizQuestion[] {
 export async function generateSJTQuestions(
   formData: Partial<JobFormData>,
 ): Promise<QuizQuestion[]> {
-  const identity = formData.identity ?? "general_unemployed";
-  const identityLabel =
-    identity === "recent_grad"
-      ? "应届毕业生"
-      : identity === "young_unemployed"
-        ? "35岁以下求职者"
-        : "35岁以上求职者";
+  const identity = formData.identity ?? "general_job_seeker";
+  const identityLabel = identityLabelOf(identity);
 
+  // 量表场景去精英化策略：应届走校园场景；社会求职者（不含确定 35-）一律走去精英化版本
+  // — 老 young_unemployed 仍走原"主流职场"版；老 general_unemployed 与新 general_job_seeker
+  // 都走"日常生活 + 服务场景"版本（最稳的画像，避免 LLM 假定用户在大厂工作）
   const contextHint =
     identity === "recent_grad"
       ? "场景偏学校、实习、兼职、社团、校园求职；可适度涉及标准职场术语"

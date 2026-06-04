@@ -1,8 +1,10 @@
 import type { Page } from "@playwright/test";
 
 export interface FormData {
-  /** 身份选择 */
-  identity: "recent_grad" | "young_unemployed" | "general_unemployed";
+  /** 身份选择（2026-06 起：recent_grad / general_job_seeker） */
+  identity: "recent_grad" | "general_job_seeker";
+  /** 出生年月，"YYYY-MM"，必填 */
+  birthDate: string;
   /** 目标岗位（选填） */
   targetPosition?: string;
   /** 学历，使用 EDUCATION_OPTIONS value：junior_high / high_school / junior_college / bachelor / master_plus */
@@ -15,8 +17,7 @@ export interface FormData {
 
 const IDENTITY_LABELS: Record<FormData["identity"], string> = {
   recent_grad: "应届毕业生",
-  young_unemployed: "35岁以下求职者",
-  general_unemployed: "35岁以上求职者",
+  general_job_seeker: "一般社会求职者",
 };
 
 const EDUCATION_LABELS: Record<string, string> = {
@@ -53,7 +54,10 @@ export class FormPage {
       .first()
       .click();
 
-    // 2. targetPosition input（选填，可跳过）
+    // 2. birthDate month input（必填）
+    await this.page.locator("#birthDate").fill(data.birthDate);
+
+    // 3. targetPosition input（选填，可跳过）
     if (data.targetPosition) {
       await this.page.locator("#targetPosition").fill(data.targetPosition);
     }

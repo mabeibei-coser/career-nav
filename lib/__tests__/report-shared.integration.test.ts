@@ -30,10 +30,28 @@ describe("buildBaseContext", () => {
     expect(ctx).not.toContain("35岁以上求职者");
   });
 
-  it("identity=general_unemployed 显式说明为35岁以上求职者", () => {
-    const ctx = buildBaseContext({ ...baseFormData, identity: "general_unemployed" });
-    expect(ctx).toContain("35岁以上求职者");
+  it("identity=general_job_seeker 显式说明为一般社会求职者", () => {
+    const ctx = buildBaseContext({ ...baseFormData, identity: "general_job_seeker" });
+    expect(ctx).toContain("一般社会求职者");
     expect(ctx).not.toContain("应届毕业生");
+  });
+
+  it("含 birthDate 时 prompt 注入出生年月 + 推断年龄", () => {
+    const ctx = buildBaseContext({
+      ...baseFormData,
+      identity: "general_job_seeker",
+      birthDate: "1990-05",
+    });
+    expect(ctx).toContain("出生年月：1990-05");
+    expect(ctx).toMatch(/约 \d+ 岁/);
+  });
+
+  it("老 identity=general_unemployed（历史数据）仍输出 35岁以上求职者", () => {
+    const ctx = buildBaseContext({
+      ...baseFormData,
+      identity: "general_unemployed",
+    });
+    expect(ctx).toContain("35岁以上求职者");
   });
 
   it("不含旧字段 targetCompany / targetCityTier", () => {

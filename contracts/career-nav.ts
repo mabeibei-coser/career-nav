@@ -14,7 +14,20 @@
 
 // ========== 表单输入类型 ==========
 
-export type UserIdentity = "recent_grad" | "young_unemployed" | "general_unemployed";
+/**
+ * 用户身份枚举（包含新、老两套 enum）。
+ * 2026-06 起表单只能选 recent_grad / general_job_seeker（见 USER_IDENTITY_OPTIONS 收窄）；
+ * 但历史数据仍含 young_unemployed / general_unemployed，DB 字段与下游 prompt 分支需要
+ * 保持识别能力，所以 UserIdentity 是「所有可能值的 union」，不是「当前可填值的 union」。
+ */
+export type UserIdentity =
+  | "recent_grad"
+  | "general_job_seeker"
+  | "young_unemployed"
+  | "general_unemployed";
+
+/** 表单当前可填的身份子集（前端 select 选项类型用这个收窄）。 */
+export type ActiveUserIdentity = "recent_grad" | "general_job_seeker";
 
 export interface JobFormData {
   identity: UserIdentity;
@@ -22,6 +35,8 @@ export interface JobFormData {
   name?: string;
   /** 从简历正文启发式抽取的中国大陆手机号（admin 后台展示用） */
   phone?: string;
+  /** 出生年月，格式 "YYYY-MM"（来自 <input type="month">）；admin 后台据此算年龄。 */
+  birthDate?: string;
   targetPosition: string;
   education: string;
   workYears: string;
