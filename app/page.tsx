@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MonthPicker } from "@/app/_components/month-picker";
 import {
   Select,
   SelectContent,
@@ -324,11 +325,17 @@ export default function HomePage() {
                 出生年月
                 <span className="text-red-400 text-xs">*</span>
               </Label>
-              <Input
+              <MonthPicker
                 id="birthDate"
-                type="month"
-                {...register("birthDate")}
-                className="h-12 text-base md:text-sm bg-white/60 border-[var(--blue-200)] focus:border-[var(--blue-400)] focus:ring-2 focus:ring-[var(--blue-500)]/20 transition-all"
+                value={watchedValues.birthDate ?? ""}
+                onChange={(v) =>
+                  setValue("birthDate", v, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
+                placeholder="选择年月"
+                invalid={Boolean(errors.birthDate)}
               />
               {errors.birthDate && (
                 <motion.p
