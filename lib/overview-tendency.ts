@@ -8,7 +8,7 @@
  * （getTendencyLabel + BIPOLAR_POLES），否则会出现"前端显示偏探索，校验当成偏稳定"的诡异错位。
  */
 
-import type { DimensionScore, QuizDimension } from "./types";
+import type { DimensionScore, Overview, QuizDimension } from "./types";
 
 /** 双极标签：与前端 BIPOLAR_POLES 严格对齐，顺序同 DIMENSION_ORDER */
 export const POLE_LABELS: Record<QuizDimension, { left: string; right: string }> = {
@@ -97,3 +97,21 @@ export function detectReverseWords(
 }
 
 export const REVERSE_WORD_ISSUE_PREFIX = "反向词冲突";
+
+/**
+ * 把 Overview 的所有自然语言字段拼成一段文本，供 detectReverseWords 一次扫完。
+ * 覆盖：personality.type、traits、description、fourDimRadar[i].conclusion、summary。
+ * 之前 validator 只扫 type+traits 是历史漏洞 —— LLM 把 type 写对、却在 conclusion/description
+ * 里继续写反向词时会逃过校验（截图 bug 的成因之一）。
+ */
+export function collectAllOverviewText(d: Overview): string {
+  return [
+    d.personality?.type ?? "",
+    ...(Array.isArray(d.personality?.traits) ? d.personality.traits : []),
+    d.personality?.description ?? "",
+    ...(Array.isArray(d.fourDimRadar)
+      ? d.fourDimRadar.map((r) => r?.conclusion ?? "")
+      : []),
+    d.summary ?? "",
+  ].join(" ");
+}

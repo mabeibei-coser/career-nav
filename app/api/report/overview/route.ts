@@ -8,6 +8,7 @@ import {
   POLE_KEYWORDS,
   POLE_LABELS,
   REVERSE_WORD_ISSUE_PREFIX,
+  collectAllOverviewText,
   detectReverseWords,
   tendencyChip,
 } from "@/lib/overview-tendency";
@@ -82,10 +83,17 @@ ${APPLICANT_BASELINE}
 混合 / 较均衡（部分维度偏左部分偏右）：
   "温和型推动者"、"务实进取型协作者"、"稳中求进型探索者"
 
-【硬约束 — 标题/标签必须呼应四维倾向，不得反向】
-- 若价值驱动**偏探索成长**（score ≥ 61）：personality.type 和 traits 中**严禁**出现 "稳健 / 务实 / 守成 / 本分 / 安稳 / 踏实肯干" 等反向核心词，应呼应 "探索 / 进取 / 开拓 / 拼搏 / 成长"
-- 若价值驱动**偏稳定务实**（score ≤ 40）：personality.type 和 traits 中**严禁**出现 "探索 / 进取 / 开拓 / 野心 / 拼搏 / 突破" 等反向核心词，应呼应 "稳健 / 务实 / 踏实"
-- 工作风格 / 性格底色 / 适配方向 三维同理，方向反了就是逻辑矛盾，会被自动拒收
+【硬约束 — 所有文本字段必须呼应四维倾向，不得反向】
+约束覆盖范围：personality.type、personality.traits、personality.description、fourDimRadar[i].conclusion、summary —— 任一字段写反方向都视为逻辑矛盾，会被自动拒收。
+- 若价值驱动**偏探索成长**（score ≥ 61）：**严禁**出现 "稳健 / 务实 / 守成 / 本分 / 安稳 / 踏实肯干" 等反向核心词，应呼应 "探索 / 进取 / 开拓 / 拼搏 / 成长"
+- 若价值驱动**偏稳定务实**（score ≤ 40）：**严禁**出现 "探索 / 进取 / 开拓 / 野心 / 拼搏 / 突破" 等反向核心词，应呼应 "稳健 / 务实 / 踏实"
+- 若工作风格**偏灵活应变**（score ≥ 61）：**严禁**出现 "按部就班 / 守规 / 保守 / 刻板 / 墨守成规" 等反向核心词，应呼应 "灵活 / 应变 / 敏捷"
+- 若工作风格**偏按部就班**（score ≤ 40）：**严禁**出现 "灵活 / 应变 / 敏捷" 等反向核心词，应呼应 "按部就班 / 规范 / 稳健"
+- 若性格底色**偏主动外向**（score ≥ 61）：**严禁**出现 "内敛 / 内向 / 沉静 / 安静寡言" 等反向核心词，应呼应 "外向 / 活跃 / 开朗"
+- 若性格底色**偏内敛沉稳**（score ≤ 40）：**严禁**出现 "外向 / 活跃 / 开朗 / 热情奔放" 等反向核心词，应呼应 "内敛 / 沉静"
+- 若适配方向**偏多元适应**（score ≥ 61）：**严禁**出现 "深耕 / 专精 / 钻研 / 聚焦" 等反向核心词，应呼应 "多元 / 跨界 / 广博"
+- 若适配方向**偏专注深耕**（score ≤ 40）：**严禁**出现 "多元 / 跨界 / 广博" 等反向核心词，应呼应 "深耕 / 专精 / 聚焦"
+- 特别提示：fourDimRadar[i].conclusion 是对该维度突出特点的 30 字描述——比如「价值驱动」偏右时不能写"追求稳定与务实"，应写"追求成长与突破"
 
 【其他硬约束】
 - personality.type 是纯中文性格定位（4-10 字），**严禁出现 MBTI / 大五 / 霍兰德等专有名词，严禁出现 ISTJ / ENFJ 这类四字母代码或任何字母缩写**
@@ -194,13 +202,12 @@ export async function POST(req: NextRequest) {
   ].join("\n");
 
   // ---- 闭包 validator：在基础 shape 校验之上叠加反向词冲突校验 ----
+  // 校验覆盖全部文本字段：type + traits + description + 4 个 conclusion + summary
+  // 之前只看 type+traits 是漏洞——LLM 把 type 写对但在 conclusion/description 写反向词，会逃过校验
   const localValidator = (d: Overview): string | null => {
     const shapeIssue = validateOverviewShape(d);
     if (shapeIssue) return shapeIssue;
-    const text =
-      (d.personality?.type ?? "") +
-      " " +
-      (Array.isArray(d.personality?.traits) ? d.personality.traits : []).join(" ");
+    const text = collectAllOverviewText(d);
     const conflicts = detectReverseWords(text, scoring.fourDim);
     if (conflicts.length > 0) {
       const summary = conflicts
@@ -220,10 +227,7 @@ export async function POST(req: NextRequest) {
     data: Overview
   ): { userPrompt: string } | null => {
     if (!issue.startsWith(REVERSE_WORD_ISSUE_PREFIX)) return null; // shape 错误不 retry
-    const text =
-      (data.personality?.type ?? "") +
-      " " +
-      (Array.isArray(data.personality?.traits) ? data.personality.traits : []).join(" ");
+    const text = collectAllOverviewText(data);
     const conflicts = detectReverseWords(text, scoring.fourDim);
     if (conflicts.length === 0) return null;
 
@@ -236,16 +240,24 @@ export async function POST(req: NextRequest) {
       return `- ${c.dimensionName}（${chip}，分数 ${dimScore.score}）：上次输出含反向词 [${c.hits.join("、")}]。**严禁**使用 "${avoid}" 这类反向词；**应呼应** "${echo}" 等方向词`;
     });
 
+    const conclusions = Array.isArray(data.fourDimRadar)
+      ? data.fourDimRadar.map((r, i) => `  [${i}] ${data.fourDimRadar[i]?.name ?? ""}: ${r?.conclusion ?? ""}`).join("\n")
+      : "";
+
     const feedback = [
       "",
       "═══ 上一轮输出存在逻辑反向问题，必须修正后重新生成 ═══",
       `上一轮 personality.type = "${data.personality?.type ?? ""}"`,
       `上一轮 traits = ${JSON.stringify(data.personality?.traits ?? [])}`,
+      `上一轮 personality.description = "${data.personality?.description ?? ""}"`,
+      `上一轮 fourDimRadar.conclusion:`,
+      conclusions,
+      `上一轮 summary = "${data.summary ?? ""}"`,
       "",
       "【冲突清单 + 修正方向】",
       ...fixLines,
       "",
-      "请重新输出完整 JSON：fourDimRadar 数值不变，personality.type / traits / description / summary 全部按上述方向重写。不要解释，直接输出新 JSON。",
+      "请重新输出完整 JSON：fourDimRadar 数值不变；type / traits / description / 4 个 conclusion / summary **全部**按上述方向重写——任一字段出现反向词都会再次被拒。不要解释，直接输出新 JSON。",
     ].join("\n");
 
     return { userPrompt: userPrompt + feedback };

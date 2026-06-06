@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
+  collectAllOverviewText,
   detectReverseWords,
   getTendency,
   tendencyChip,
 } from "../overview-tendency";
-import type { DimensionScore } from "../types";
+import type { DimensionScore, Overview } from "../types";
 
 /** 构造一份四维评分（按 lib/scoring.ts DIMENSION_ORDER 顺序） */
 function makeFourDim(scores: {
@@ -113,5 +114,131 @@ describe("detectReverseWords — 复现用户报告的 bug", () => {
     const text = "沉稳协调者";
     const conflicts = detectReverseWords(text, fourDim);
     expect(conflicts.find((c) => c.dimension === "personality")).toBeUndefined();
+  });
+});
+
+describe("collectAllOverviewText — 覆盖全部文本字段", () => {
+  function makeOverview(partial: Partial<Overview> = {}): Overview {
+    return {
+      personality: {
+        type: "成长开拓者",
+        traits: ["进取", "灵活", "多元"],
+        description: "描述文本",
+        ...(partial.personality ?? {}),
+      },
+      fourDimRadar: partial.fourDimRadar ?? [
+        { name: "性格底色", score: 70, conclusion: "底色结论" },
+        { name: "工作风格", score: 80, conclusion: "风格结论" },
+        { name: "价值驱动", score: 70, conclusion: "价值结论" },
+        { name: "适配方向", score: 65, conclusion: "方向结论" },
+      ],
+      summary: partial.summary ?? "总结文本",
+    };
+  }
+
+  it("包含 type / traits / description / conclusions / summary 全部字段", () => {
+    const o = makeOverview();
+    const text = collectAllOverviewText(o);
+    expect(text).toContain("成长开拓者");
+    expect(text).toContain("进取");
+    expect(text).toContain("灵活");
+    expect(text).toContain("多元");
+    expect(text).toContain("描述文本");
+    expect(text).toContain("底色结论");
+    expect(text).toContain("风格结论");
+    expect(text).toContain("价值结论");
+    expect(text).toContain("方向结论");
+    expect(text).toContain("总结文本");
+  });
+
+  it("空字段不抛错（缺 description / 缺 conclusion / 缺 summary）", () => {
+    const o: Overview = {
+      personality: { type: "X", traits: ["a"], description: "" },
+      fourDimRadar: [
+        { name: "性格底色", score: 50 },
+        { name: "工作风格", score: 50 },
+        { name: "价值驱动", score: 50 },
+        { name: "适配方向", score: 50 },
+      ],
+      summary: "",
+    };
+    expect(() => collectAllOverviewText(o)).not.toThrow();
+  });
+});
+
+describe("回归测试 — 用户 2026-06 截图实际场景", () => {
+  // 用户报告：value/workstyle/personality/direction 都偏右（≥61）
+  // 但 personality.type="稳健型管理专家" + traits=["流程严谨","统筹有力","务实高效"]
+  // 现象：type 含"稳健"、traits 含"务实"，should 必被检出
+  it("稳健型管理专家 + 务实高效 在 value=70 偏右 → 检出 稳健/务实", () => {
+    const fourDim: DimensionScore[] = [
+      { dimension: "personality", name: "性格底色", score: 70 },
+      { dimension: "workstyle", name: "工作风格", score: 80 },
+      { dimension: "value", name: "价值驱动", score: 70 },
+      { dimension: "direction", name: "适配方向", score: 65 },
+    ];
+    const overview: Overview = {
+      personality: {
+        type: "稳健型管理专家",
+        traits: ["流程严谨", "统筹有力", "务实高效"],
+        description: "描述",
+      },
+      fourDimRadar: fourDim.map((d) => ({ name: d.name, score: d.score, conclusion: "x" })),
+      summary: "总结",
+    };
+    const conflicts = detectReverseWords(collectAllOverviewText(overview), fourDim);
+    const valueConflict = conflicts.find((c) => c.dimension === "value");
+    expect(valueConflict).toBeDefined();
+    expect(valueConflict!.hits).toEqual(expect.arrayContaining(["稳健", "务实"]));
+  });
+
+  // type/traits 全干净，但 description / conclusion / summary 里塞反向词
+  // 旧 validator 只看 type+traits 会放过；新 validator 必须全部命中
+  it("type+traits 干净 + conclusion 含反向词 → 新 validator 必须检出", () => {
+    const fourDim: DimensionScore[] = [
+      { dimension: "personality", name: "性格底色", score: 50 },
+      { dimension: "workstyle", name: "工作风格", score: 50 },
+      { dimension: "value", name: "价值驱动", score: 72 }, // 偏右
+      { dimension: "direction", name: "适配方向", score: 50 },
+    ];
+    const overview: Overview = {
+      personality: {
+        type: "成长开拓者", // 干净
+        traits: ["进取", "灵活"], // 干净
+        description: "描述", // 干净
+      },
+      fourDimRadar: [
+        { name: "性格底色", score: 50 },
+        { name: "工作风格", score: 50 },
+        // value 偏右，但 conclusion 写反方向
+        { name: "价值驱动", score: 72, conclusion: "追求稳健务实，重视守成与本分" },
+        { name: "适配方向", score: 50 },
+      ],
+      summary: "干净的总结",
+    };
+    const conflicts = detectReverseWords(collectAllOverviewText(overview), fourDim);
+    expect(conflicts.length).toBeGreaterThan(0);
+    const v = conflicts.find((c) => c.dimension === "value");
+    expect(v).toBeDefined();
+    expect(v!.hits).toEqual(expect.arrayContaining(["稳健", "务实", "守成", "本分"]));
+  });
+
+  // summary 反向词单测
+  it("type+traits+conclusion 干净 + summary 含反向词 → 检出", () => {
+    const fourDim: DimensionScore[] = [
+      { dimension: "personality", name: "性格底色", score: 50 },
+      { dimension: "workstyle", name: "工作风格", score: 75 }, // 偏右（灵活）
+      { dimension: "value", name: "价值驱动", score: 50 },
+      { dimension: "direction", name: "适配方向", score: 50 },
+    ];
+    const overview: Overview = {
+      personality: { type: "灵活协调者", traits: ["敏捷"], description: "" },
+      fourDimRadar: fourDim.map((d) => ({ name: d.name, score: d.score, conclusion: "x" })),
+      summary: "你倾向于按部就班，遵守既定流程", // 含 workstyle.left "按部就班" / "守规"
+    };
+    const conflicts = detectReverseWords(collectAllOverviewText(overview), fourDim);
+    const ws = conflicts.find((c) => c.dimension === "workstyle");
+    expect(ws).toBeDefined();
+    expect(ws!.hits).toEqual(expect.arrayContaining(["按部就班"]));
   });
 });
