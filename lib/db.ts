@@ -39,6 +39,7 @@ export function getDb(): Database.Database {
       quiz_answers_json TEXT,
       scoring_json TEXT,
       interview_q1q2_json TEXT,
+      interview_q3q4_json TEXT,
       report_json TEXT,
       dynamic_questions_json TEXT,
       interview_questions_json TEXT,
@@ -56,6 +57,9 @@ export function getDb(): Database.Database {
   }
   if (!existingCols.has("interview_questions_json")) {
     _db.exec("ALTER TABLE reports ADD COLUMN interview_questions_json TEXT");
+  }
+  if (!existingCols.has("interview_q3q4_json")) {
+    _db.exec("ALTER TABLE reports ADD COLUMN interview_q3q4_json TEXT");
   }
   _db.exec(
     `CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at DESC)`

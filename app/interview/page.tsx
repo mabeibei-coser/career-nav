@@ -23,6 +23,7 @@ import { startAfterQ2 } from "@/lib/report-bg-runner";
 import type {
   InterviewAnswer,
   InterviewQuestion,
+  InterviewQ3Q4,
   JobFormData,
   QuizAnswer,
   ScoringResult,
@@ -346,7 +347,12 @@ export default function InterviewPage() {
       try {
         sessionStorage.setItem(
           "interviewQuestions",
-          JSON.stringify({ Q1: q1q2[0]?.text, Q2: q1q2[1]?.text }),
+          JSON.stringify({
+            Q1: q1q2[0]?.text,
+            Q2: q1q2[1]?.text,
+            Q3: q3q4[0]?.text,
+            Q4: q3q4[1]?.text,
+          }),
         );
       } catch {
         /* 配额满 / 隐私模式 → 静默降级 */
@@ -661,6 +667,20 @@ export default function InterviewPage() {
           generatedAt: new Date().toISOString(),
         }),
       );
+      // 持久化 Q3/Q4 答案（固定题库占位题）——独立 key，绝不并进 interviewQ1Q2。
+      // 后者会喂进报告生成；Q3/Q4 仅供后台档案留痕，不入报告。
+      try {
+        const q3 = allAnswers.find((a) => a.questionId === "Q3")?.text?.trim();
+        const q4 = allAnswers.find((a) => a.questionId === "Q4")?.text?.trim();
+        const q3q4: InterviewQ3Q4 = {};
+        if (q3) q3q4.Q3 = q3;
+        if (q4) q3q4.Q4 = q4;
+        if (q3q4.Q3 || q3q4.Q4) {
+          sessionStorage.setItem("interviewQ3Q4", JSON.stringify(q3q4));
+        }
+      } catch {
+        /* 配额满 / 隐私模式 → 静默降级 */
+      }
       setPhaseSync("done");
       router.push("/loading");
     },

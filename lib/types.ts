@@ -135,6 +135,13 @@ export interface InterviewQ1Q2 {
   Q2?: string;
 }
 
+// Q3/Q4 固定题库占位题的答案。独立于 InterviewQ1Q2：后者会喂进报告生成，
+// Q3/Q4 仅供后台档案留痕，绝不并入 interviewQ1Q2。
+export interface InterviewQ3Q4 {
+  Q3?: string;
+  Q4?: string;
+}
+
 // ========== 报告类型 ==========
 
 export type ReportSectionKey =

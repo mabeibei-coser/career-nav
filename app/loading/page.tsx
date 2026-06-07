@@ -492,6 +492,7 @@ export default function LoadingPage() {
         // 让 admin 端能追溯 LLM 动态生成的 SJT-03~08 + Q1/Q2 题干
         let quizQuestionsSnap: unknown = undefined;
         let interviewQuestionsSnap: unknown = undefined;
+        let interviewQ3Q4Snap: unknown = undefined;
         try {
           const qqStr = sessionStorage.getItem("quizQuestions");
           if (qqStr) quizQuestionsSnap = JSON.parse(qqStr);
@@ -500,6 +501,11 @@ export default function LoadingPage() {
           const iqStr = sessionStorage.getItem("interviewQuestions");
           if (iqStr) interviewQuestionsSnap = JSON.parse(iqStr);
         } catch { /* ignore */ }
+        // Q3/Q4 答案（固定题库占位题）—— 由 interview 页 finishAndGo 写入，仅供档案留痕
+        try {
+          const q34Str = sessionStorage.getItem("interviewQ3Q4");
+          if (q34Str) interviewQ3Q4Snap = JSON.parse(q34Str);
+        } catch { /* ignore */ }
         fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/finalize`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -507,6 +513,7 @@ export default function LoadingPage() {
             formData,
             quizAnswers,
             interviewQ1Q2,
+            interviewQ3Q4: interviewQ3Q4Snap,
             quizQuestions: quizQuestionsSnap,
             interviewQuestions: interviewQuestionsSnap,
             reportData: report,

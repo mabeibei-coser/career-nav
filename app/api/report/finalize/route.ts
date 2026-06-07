@@ -5,6 +5,7 @@ import path from "path";
 import { getDb } from "@/lib/db";
 import type {
   InterviewQ1Q2,
+  InterviewQ3Q4,
   JobFormData,
   QuizAnswer,
   QuizQuestion,
@@ -24,12 +25,15 @@ interface FinalizeRequestBody {
   quizAnswers?: QuizAnswer[];
   scoring?: ScoringResult;
   interviewQ1Q2?: InterviewQ1Q2;
+  /** Q3/Q4 固定题库占位题答案。独立存，不并入 interviewQ1Q2（后者会喂进报告生成）。 */
+  interviewQ3Q4?: InterviewQ3Q4;
   reportData: ReportData;
   /** 8 道量表题完整 snapshot（含 SJT-01~02 固定题 + SJT-03~08 LLM 动态题）。
    *  动态题原本只存在进程内存缓存（6h TTL），不入库会导致 admin 端无法追溯题干。*/
   quizQuestions?: QuizQuestion[];
-  /** Q1/Q2 访谈题干（LLM 按用户简历动态生成）。同样原本只活在内存，需快照入库。*/
-  interviewQuestions?: { Q1?: string; Q2?: string };
+  /** 访谈题干快照。Q1/Q2 由 LLM 按简历动态生成，Q3/Q4 从固定题库随机抽，
+   *  都原本只活在内存，需快照入库供 admin 端追溯。*/
+  interviewQuestions?: { Q1?: string; Q2?: string; Q3?: string; Q4?: string };
   // 兼容现有 loading 页 caller 仍在传的字段
   sectionsStatus?: unknown;
   durationMs?: number;
@@ -48,6 +52,7 @@ export async function POST(req: NextRequest) {
       quizAnswers,
       scoring,
       interviewQ1Q2,
+      interviewQ3Q4,
       reportData,
       quizQuestions,
       interviewQuestions,
@@ -111,9 +116,9 @@ export async function POST(req: NextRequest) {
             (created_at, target_position, target_education, target_company, target_city_tier,
              has_resume, resume_filename, sections_status, ip, user_agent, duration_ms,
              uuid, user_identity, form_data_json, quiz_answers_json, scoring_json,
-             interview_q1q2_json, report_json, dynamic_questions_json,
+             interview_q1q2_json, interview_q3q4_json, report_json, dynamic_questions_json,
              interview_questions_json, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           createdAt,
@@ -134,6 +139,7 @@ export async function POST(req: NextRequest) {
           quizAnswers ? JSON.stringify(quizAnswers) : null,
           JSON.stringify(finalScoring),
           finalQ1Q2 ? JSON.stringify(finalQ1Q2) : null,
+          interviewQ3Q4 ? JSON.stringify(interviewQ3Q4) : null,
           JSON.stringify(reportData),
           quizQuestions ? JSON.stringify(quizQuestions) : null,
           interviewQuestions ? JSON.stringify(interviewQuestions) : null,
