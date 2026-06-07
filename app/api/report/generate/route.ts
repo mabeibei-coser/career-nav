@@ -133,8 +133,9 @@ ${APPLICANT_BASELINE}
 1. 章节生成顺序在脑子里走：overview → strength → positioning → resumeDiagnosis → advice
 2. **性格定位**（overview.personality.type）一旦决定，strength 的优势描述语气、positioning 的选岗逻辑、advice 的行动方向都要与之呼应
 3. **推荐岗位**（positioning.primary/secondary.position）一旦决定，advice 的 topThree 不能与推荐岗位方向矛盾
-4. **能力雷达**（strength.abilityRadar、positioning.coreCompetencies）的 score **必须使用入参 scoring 中的数值**，禁止重新计算（后端会再次覆写）
+4. **能力雷达**（strength.abilityRadar）的 score **必须使用入参 scoring 中的数值**，禁止重新计算（后端会再次覆写）
 5. **四维评分**（overview.fourDimRadar）同样照搬入参 scoring.fourDim 数值
+   ※ 注意：positioning.coreCompetencies 是另一套打分逻辑（按岗位定制），后端**不会**覆写，由你自己根据简历 + 量表 + 访谈综合给分，详见模块 ③
 6. 简历改进建议（resumeDiagnosis.suggestions）一旦给出，advice 不要重复同样内容
 
 【模块 ① overview（总评）】
@@ -172,16 +173,43 @@ ${APPLICANT_BASELINE}
 - 描述语气与 overview.personality 保持一致
 
 【模块 ③ positioning（职业定位）】
-- primary: { position, matchScore (0-100), culture, teamRole, coreResponsibilities (5条，14-25字，长度刻意错落), coreCompetencies ([{name}] 必须 5 项), fitReason (60-80字), specialNote (40-70字具体可执行建议) }
-- secondary: 同结构，coreCompetencies 与 primary 至少 1-2 个不同维度
-- coreCompetencies.name 必须从以下 6 个固定维度里选（一字不差）：
-  沟通表达 / 协作意识 / 执行落地 / 学习能力 / 信息处理 / 压力适应
-  **不要输出 score 字段**，系统统一填充
+- primary: { position, matchScore (0-100), culture, teamRole, coreResponsibilities (5条，14-25字，长度刻意错落), coreCompetencies ([{name, score}] 必须 5 项), fitReason (60-80字), specialNote (40-70字具体可执行建议) }
+- secondary: 同结构，coreCompetencies 与 primary **至少 3 项名称不同**（两个岗位是不同能力画像）
 - position 要具体（如「薪酬绩效专员」而不是「人力资源」）
 - targetPosition 是用户自述方向，不是默认首选答案：
   a) 与能力契合 → 首选可以是它或升阶版
   b) 方向对但够不着 → 首选推更匹配的，次选放目标
   c) 明显不匹配 → 首选推真正匹配的，fitReason 诚恳说明
+
+【positioning.coreCompetencies 核心约束 — 必须严格遵守】
+
+**① name 按"该推荐岗位真实需要的能力"定义，不是固定 6 维**
+- 一字不差**禁止使用**这 6 个泛化标签作为 name：「沟通表达」「协作意识」「执行落地」「学习能力」「信息处理」「压力适应」——这些是测评维度，不是岗位能力画像
+- 必须根据 position 写**岗位特定的能力**，4-8 字，体现该岗位真正在用什么
+- 例：
+  - 客户服务专员（金融）→ 客户沟通话术 / 业务流程熟练 / 投诉化解能力 / 合规话术意识 / 情绪稳定度
+  - 行政人事助理 → 多线事务调度 / 公文与档案规范 / 跨部门协调 / 劳动法规基础 / 细致与零差错
+  - 数据分析助理 → 数据敏感度 / Excel/SQL 操作 / 业务理解力 / 图表呈现 / 结论提炼
+  - 运营专员（消费品）→ 用户洞察 / 内容文案能力 / 数据驱动思维 / 项目推进 / 跨部门沟通
+- 命名风格：具体动作 + 对象（"客户沟通话术"），或具体场景能力（"投诉化解能力"），不要"沟通能力""协作能力"这种宽口径
+- primary 与 secondary 各自一套，**至少 3 项名称不同**
+
+**② score 综合三方面打分（0-100 整数）**
+- (a) 量表 6 维能力分数（沟通表达/协作意识/...）作**底数**：把它们映射到与本岗位 name 最相关的那项上
+- (b) 简历经历中的相关证据：该项能力在简历里有过硬证据（项目经历、量化成果）→ 加分；简历完全没体现 → 不加分但也不重罚
+- (c) Q1/Q2 访谈反映的表达 / 思考状态：访谈表达清晰、对该岗位理解到位 → 加分
+- **后端不会覆写 score**，你必须自己给出，且要数值合理（避免全部接近 80 这种平均化）
+
+**③ 整体水位偏「合适」，但要诚恳指出不足**
+- 5 项分数**均值 ≥ 72**（让用户感觉"基本胜任"）
+- 3-4 项落在 **75-90** 区间（"擅长 / 较擅长"段位）
+- **至少 1 项 落在 55-70**（短板，用于指出"还需提升"）；不允许 5 项全部 ≥ 75（看起来像吹捧）
+- 短板项必须在 fitReason 或 specialNote 里**点名提到**该具体能力名，并给一句"如何补"的可执行建议
+- 反例（禁止）：
+  - 全部 ≥ 80 → 用户感觉不真诚
+  - 多项 < 55 → 整体偏向"不合适"，违背产品方向
+  - 5 项均值 < 70 → 同上
+
 硬约束：
 - ${COMPANY_NO_NAME_NOTE}
 - ${FORBIDDEN_FRAUD_NOTE}
@@ -213,8 +241,8 @@ topThree — 用户下一步最重要的三件事，按优先级从高到低。�
     "growth": [{ "title": "string", "detail": "string" }]
   },
   "positioning": {
-    "primary": { "position": "string", "matchScore": 0, "culture": "string", "teamRole": "string", "coreResponsibilities": ["string"], "coreCompetencies": [{ "name": "string" }], "fitReason": "string", "specialNote": "string" },
-    "secondary": { "position": "string", "matchScore": 0, "culture": "string", "teamRole": "string", "coreResponsibilities": ["string"], "coreCompetencies": [{ "name": "string" }], "fitReason": "string", "specialNote": "string" }
+    "primary": { "position": "string", "matchScore": 0, "culture": "string", "teamRole": "string", "coreResponsibilities": ["string"], "coreCompetencies": [{ "name": "string", "score": 0 }], "fitReason": "string", "specialNote": "string" },
+    "secondary": { "position": "string", "matchScore": 0, "culture": "string", "teamRole": "string", "coreResponsibilities": ["string"], "coreCompetencies": [{ "name": "string", "score": 0 }], "fitReason": "string", "specialNote": "string" }
   },
   "resumeDiagnosis": ${hasResume ? `{ "overallScore": 0, "issues": [{ "title": "string", "detail": "string", "priority": "high|medium|low", "revisionExample": "string" }], "suggestions": [{ "title": "string", "detail": "string" }] }` : "null"},
   "advice": { "topThree": [{ "title": "string", "detail": "string", "deadline": "string" }] }
@@ -249,10 +277,12 @@ function buildMegaUserPrompt(
     "【性格四维评分（overview.fourDimRadar 必须照搬，且所有 overview 文本必须呼应右侧倾向标签）】",
     fourDimLines,
     "",
-    "【能力六维评分（strength.abilityRadar 必须照搬，positioning.coreCompetencies 从这 6 项里选 5）】",
+    "【能力六维评分（strength.abilityRadar 必须照搬；positioning.coreCompetencies 把这 6 个作为打分底数参考，但 name 要按岗位定制、score 综合简历+量表+访谈自行打）】",
     abilityLines,
     "",
-    "提醒：所有 score 字段必须严格照抄上述数值，不要重新计算；后端会再次覆写，但你输出错也会触发校验失败重试。",
+    "提醒：",
+    "- overview.fourDimRadar / strength.abilityRadar 的 score 必须严格照抄上述数值，后端会覆写；输出错也会触发校验失败重试。",
+    "- positioning.coreCompetencies 的 name **不要**用上面 6 个泛化标签，按岗位定制；score 由你综合三方面（简历证据 / 量表底数 / Q1Q2 访谈）自行打分，后端**不覆写**——所以要打得合理且符合「整体偏合适、至少 1 项明显短板」的水位约束。",
   ].join("\n");
 }
 
@@ -288,6 +318,11 @@ function validateStrength(d: Strength): string | null {
   return null;
 }
 
+// 6 个量表泛化标签——positioning.coreCompetencies.name 不允许直接使用
+const GENERIC_ABILITY_TAGS = new Set([
+  "沟通表达", "协作意识", "执行落地", "学习能力", "信息处理", "压力适应",
+]);
+
 function validatePositionRec(
   rec: PositionRecommendation | undefined,
   label: string
@@ -298,7 +333,45 @@ function validatePositionRec(
     return `${label}.matchScore 非数字`;
   if (isBad(rec.culture, 4)) return `${label}.culture 缺失`;
   if (isBad(rec.teamRole, 2)) return `${label}.teamRole 缺失`;
+
+  // 核心能力雷达：必须 5 项，name 按岗位定制（禁泛化标签），score 0-100 数字
+  if (!Array.isArray(rec.coreCompetencies) || rec.coreCompetencies.length < 5)
+    return `${label}.coreCompetencies 必须 5 项`;
+  const seen = new Set<string>();
+  for (const c of rec.coreCompetencies.slice(0, 5)) {
+    if (!c || typeof c.name !== "string" || !c.name.trim())
+      return `${label}.coreCompetencies.name 缺失`;
+    const name = c.name.trim();
+    if (GENERIC_ABILITY_TAGS.has(name))
+      return `${label}.coreCompetencies 出现泛化标签「${name}」，应按岗位定制`;
+    if (seen.has(name))
+      return `${label}.coreCompetencies 出现重复 name「${name}」`;
+    seen.add(name);
+    if (typeof c.score !== "number" || !Number.isFinite(c.score) || c.score < 0 || c.score > 100)
+      return `${label}.coreCompetencies.score 非法（${String(c.score)}）`;
+  }
   return null;
+}
+
+const POSITIONING_WATERLINE_ISSUE_PREFIX = "positioning-waterline";
+
+function validatePositioningWaterline(d: Positioning): string | null {
+  const issues: string[] = [];
+  // 整体偏「合适」：均值 ≥ 70，至少 1 项 ≤ 70（明显短板），primary/secondary 重叠 ≤ 2
+  for (const [label, rec] of [["primary", d.primary], ["secondary", d.secondary]] as const) {
+    const scores = (rec.coreCompetencies ?? []).slice(0, 5).map((c) => c.score);
+    if (scores.length < 5) continue;
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    if (avg < 70) issues.push(`${label} 均值 ${avg.toFixed(1)} 偏低（应 ≥ 72）`);
+    if (!scores.some((s) => s <= 70))
+      issues.push(`${label} 缺少明显短板项（应至少 1 项 ≤ 70 用于诚恳指出不足）`);
+  }
+  const pNames = new Set((d.primary.coreCompetencies ?? []).slice(0, 5).map((c) => c.name.trim()));
+  const sNames = (d.secondary.coreCompetencies ?? []).slice(0, 5).map((c) => c.name.trim());
+  const overlap = sNames.filter((n) => pNames.has(n)).length;
+  if (overlap > 2)
+    issues.push(`primary/secondary coreCompetencies 重叠 ${overlap} 项（应 ≤ 2）`);
+  return issues.length === 0 ? null : `${POSITIONING_WATERLINE_ISSUE_PREFIX}: ${issues.join("; ")}`;
 }
 
 function validatePositioning(d: Positioning): string | null {
@@ -306,6 +379,8 @@ function validatePositioning(d: Positioning): string | null {
   if (p) return p;
   const s = validatePositionRec(d?.secondary, "positioning.secondary");
   if (s) return s;
+  const w = validatePositioningWaterline(d);
+  if (w) return w;
   return null;
 }
 
@@ -389,6 +464,35 @@ function buildOnValidationFailure(
   userPrompt: string
 ) {
   return (issue: string, data: AllSections): { userPrompt: string } | null => {
+    // 分支 1：positioning coreCompetencies 水位修正
+    if (issue.startsWith(POSITIONING_WATERLINE_ISSUE_PREFIX)) {
+      const dumpRec = (label: string, rec: PositionRecommendation | undefined) => {
+        const items = (rec?.coreCompetencies ?? [])
+          .slice(0, 5)
+          .map((c) => `${c.name}=${c.score}`)
+          .join(", ");
+        return `  ${label}（${rec?.position ?? "?"}）: [${items}]`;
+      };
+      const feedback = [
+        "",
+        "═══ 上一轮 positioning.coreCompetencies 水位不达标，必须修正后重新生成完整 JSON ═══",
+        `问题：${issue.replace(POSITIONING_WATERLINE_ISSUE_PREFIX + ": ", "")}`,
+        "上一轮输出：",
+        dumpRec("primary", data.positioning?.primary),
+        dumpRec("secondary", data.positioning?.secondary),
+        "",
+        "【修正方向】整体偏「合适」 + 诚恳指出不足：",
+        "- 5 项分数均值 ≥ 72（让用户感觉基本胜任）",
+        "- 3-4 项落 75-90 区间（擅长 / 较擅长）",
+        "- 至少 1 项落 55-70（短板，必须在 fitReason / specialNote 里点名提到并给可执行建议）",
+        "- primary 与 secondary 至少 3 项 name 不同",
+        "",
+        "请重新输出完整 5 模块 JSON：positioning 严格按上述水位重写；其他模块保持上一轮内容（如果一致就照搬）。不要解释，直接输出新 JSON。",
+      ].join("\n");
+      return { userPrompt: userPrompt + feedback };
+    }
+
+    // 分支 2：overview 反向词冲突修正
     if (!issue.startsWith(REVERSE_WORD_ISSUE_PREFIX)) return null;
     const text = collectAllOverviewText(data.overview);
     const conflicts = detectReverseWords(text, scoring.fourDim);
@@ -453,35 +557,20 @@ function normalizeStrength(d: Strength, scoring: ScoringResult): Strength {
   return d;
 }
 
-function normalizePositioning(d: Positioning, scoring: ScoringResult): Positioning {
-  const abilityScores = scoring.ability.map((a) => a.score);
-  const userMax = Math.max(...abilityScores);
-  const userMin = Math.min(...abilityScores);
-  const range = Math.max(userMax - userMin, 1);
-  const toMatch = (raw: number) => Math.round(68 + ((raw - userMin) / range) * 28);
-  const matchMap = new Map(scoring.ability.map((a) => [a.name, toMatch(a.score)]));
-  const rawMap = new Map(scoring.ability.map((a) => [a.name, a.score]));
-
+function normalizePositioning(d: Positioning): Positioning {
+  // coreCompetencies 不再被量表分覆写——validator 已经保证形状（5 项、name 非泛化、score 0-100）
+  // 这里只做去重、裁剪、clamp、trim
   const normalizeRec = (rec: PositionRecommendation): PositionRecommendation => {
     const rawComps = Array.isArray(rec.coreCompetencies) ? rec.coreCompetencies : [];
-    const pickedNames = rawComps
-      .filter((c) => c && typeof c.name === "string")
-      .map((c) => String(c.name).trim())
-      .filter((n) => matchMap.has(n));
-    const unique = [...new Set(pickedNames)];
-    const comps: { name: string; score: number }[] = unique.map((n) => ({
-      name: n,
-      score: matchMap.get(n)!,
-    }));
-    if (comps.length < 5) {
-      const picked = new Set(comps.map((c) => c.name));
-      const remaining = [...scoring.ability]
-        .filter((a) => !picked.has(a.name))
-        .sort((x, y) => rawMap.get(y.name)! - rawMap.get(x.name)!);
-      for (const a of remaining) {
-        if (comps.length >= 5) break;
-        comps.push({ name: a.name, score: matchMap.get(a.name)! });
-      }
+    const seen = new Set<string>();
+    const comps: { name: string; score: number }[] = [];
+    for (const c of rawComps) {
+      if (!c || typeof c.name !== "string") continue;
+      const name = c.name.trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      comps.push({ name, score: clampScore(c.score) });
+      if (comps.length >= 5) break;
     }
     return {
       ...rec,
@@ -490,7 +579,7 @@ function normalizePositioning(d: Positioning, scoring: ScoringResult): Positioni
       coreResponsibilities: Array.isArray(rec.coreResponsibilities)
         ? rec.coreResponsibilities.map((r) => String(r).trim()).filter(Boolean)
         : undefined,
-      coreCompetencies: comps.slice(0, 5),
+      coreCompetencies: comps,
       fitReason:
         typeof rec.fitReason === "string" && rec.fitReason.trim()
           ? rec.fitReason.trim()
@@ -630,7 +719,7 @@ export async function POST(req: NextRequest) {
   // ---- 后处理：强制覆写 score / normalize / patch ----
   const overview = normalizeOverview(raw.overview, scoring);
   const strength = normalizeStrength(raw.strength, scoring);
-  const positioning = normalizePositioning(raw.positioning, scoring);
+  const positioning = normalizePositioning(raw.positioning);
   const resumeDiagnosis: ResumeDiagnosis | null = hasResume
     ? (raw.resumeDiagnosis ?? MOCK_RESUME_DIAGNOSIS)
     : null;
