@@ -397,7 +397,7 @@ export default function LoadingPage() {
       }
       formData = JSON.parse(fdStr) as JobFormData;
       scoring = JSON.parse(scStr) as ScoringResult;
-      if (!formData?.targetPosition || !scoring?.fourDim) {
+      if (!formData?.identity || !scoring?.fourDim) {
         router.replace("/");
         return;
       }
