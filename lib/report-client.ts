@@ -69,6 +69,10 @@ interface CallPayload {
 
 const GENERATE_ENDPOINT = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/report/generate`;
 
+// 前端 fetch 硬超时：server 端 callWithFallback 主链路 120s + 讯飞兜底 120s，最坏 240s
+// 设 250s 让 server 端有机会自然返回 mock；超时后前端会走 consumeAll 的 mock fallback
+const FETCH_TIMEOUT_MS = 250_000;
+
 // 5 个 section 的标签（loading 页展示用）
 const SECTION_LABEL: Record<ReportSectionKey, string> = {
   overview: "绘制定位总览",
@@ -90,20 +94,38 @@ const SECTION_KEYS: ReportSectionKey[] = [
 
 async function callGenerate(
   payload: CallPayload,
-  signal?: AbortSignal
+  externalSignal?: AbortSignal
 ): Promise<GenerateSections | null> {
-  const res = await fetch(GENERATE_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal,
-  });
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error || `HTTP ${res.status}`);
+  // 已被外部取消（用户跳回首页 / clearBgSections）→ 直接抛 abort，不发请求
+  if (externalSignal?.aborted) {
+    throw externalSignal.reason ?? new DOMException("Aborted", "AbortError");
   }
-  const json = (await res.json()) as { data?: GenerateSections };
-  return json.data ?? null;
+  // 内部 AbortController 同时承接 250s 硬超时 + 外部 signal，
+  // 防止 server 端 hang 时前端无限等（旧版无 timeout 是 "一直转圈" 的主因）
+  const ac = new AbortController();
+  const timeoutId = setTimeout(
+    () => ac.abort(new DOMException("Fetch timeout", "TimeoutError")),
+    FETCH_TIMEOUT_MS
+  );
+  const onExternalAbort = () => ac.abort(externalSignal?.reason);
+  externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
+  try {
+    const res = await fetch(GENERATE_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: ac.signal,
+    });
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(j.error || `HTTP ${res.status}`);
+    }
+    const json = (await res.json()) as { data?: GenerateSections };
+    return json.data ?? null;
+  } finally {
+    clearTimeout(timeoutId);
+    externalSignal?.removeEventListener("abort", onExternalAbort);
+  }
 }
 
 function isRateLimitError(e: unknown): boolean {
@@ -119,14 +141,17 @@ function wait(ms: number) {
 
 async function callGenerateWithRetry(
   payload: CallPayload,
-  retries = 1
+  retries = 1,
+  signal?: AbortSignal
 ): Promise<GenerateSections | null> {
   let attempts = 0;
   let lastError: unknown;
   while (attempts <= retries) {
     try {
-      return await callGenerate(payload);
+      return await callGenerate(payload, signal);
     } catch (e) {
+      // 外部 abort（用户跳回首页）→ 立即终止，不浪费 retry
+      if (signal?.aborted) throw e;
       lastError = e;
       attempts++;
       if (attempts > retries) break;
@@ -146,14 +171,17 @@ async function callGenerateWithRetry(
  * bg-runner 调用此函数触发单次 generate 请求。
  * 返回 Promise<GenerateSections | null>，bg-runner 存储后在 consumeAll 里消费。
  */
-export function clientFireGenerate(payload: StartPayload): Promise<unknown> {
+export function clientFireGenerate(
+  payload: StartPayload,
+  signal?: AbortSignal
+): Promise<unknown> {
   const callPayload: CallPayload = {
     formData: payload.formData,
     quizAnswers: payload.quizAnswers,
     scoring: payload.scoring,
     interviewQ1Q2: payload.interviewQ1Q2,
   };
-  return callGenerateWithRetry(callPayload, 1);
+  return callGenerateWithRetry(callPayload, 1, signal);
 }
 
 /** @deprecated no-op：保留函数签名供历史调用点 import 不破 */

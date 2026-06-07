@@ -21,6 +21,9 @@ interface PendingGenerate {
   // Promise<unknown> 对外隐藏具体类型，consumeAll 内部会强制转换
   promise: Promise<unknown>;
   startedAt: number;
+  // clearBgSections 时 abort 真正的 server fetch，
+  // 避免用户被弹回首页后 server 端 LLM 调用仍在跑、占住 DeepSeek 配额
+  abortController: AbortController;
 }
 
 let pendingGenerate: PendingGenerate | null = null;
@@ -90,9 +93,10 @@ export function startAfterQ2(payload: StartPayload): void {
     console.info("[bg-runner] startAfterQ2 idempotent hit", { fp: fp.slice(0, 50) });
     return;
   }
-  const promise = clientFireGenerate(payload);
+  const abortController = new AbortController();
+  const promise = clientFireGenerate(payload, abortController.signal);
   promise.catch(() => {}); // 防 unhandled rejection 警告
-  pendingGenerate = { fingerprint: fp, promise, startedAt: Date.now() };
+  pendingGenerate = { fingerprint: fp, promise, startedAt: Date.now(), abortController };
   writeSessionMark(fp);
   console.info("[bg-runner] startAfterQ2 fired → /api/report/generate", { fp: fp.slice(0, 50) });
 }
@@ -148,8 +152,16 @@ export function consumeBgGeneratePromise(
 
 /**
  * 报告生成完成或用户主动重置时调用：清空内存 + sessionStorage。
+ * 同步 abort 还在跑的 server fetch，避免被弹回首页后 LLM 调用积压、占 DeepSeek 配额。
  */
 export function clearBgSections(): void {
+  if (pendingGenerate) {
+    try {
+      pendingGenerate.abortController.abort();
+    } catch {
+      /* ignore */
+    }
+  }
   pendingGenerate = null;
   clearSessionMark();
 }
