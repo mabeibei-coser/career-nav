@@ -53,8 +53,8 @@ const SECTION_LABELS: Record<ReportSectionKey, string> = {
   advice: "行动建议",
 };
 
-// 180 秒超时：顺序生成 5 模块，P95 约 150s，给足缓冲
-const TIMEOUT_MS = 180_000;
+// 90 秒后给用户一个兜底按钮；后台生成仍会继续，完成后会自动跳报告。
+const TIMEOUT_MS = 90_000;
 
 // ===== 身份化 Tips =====
 

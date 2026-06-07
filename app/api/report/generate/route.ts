@@ -54,8 +54,8 @@ export const runtime = "nodejs";
 // 主链路 120s + 讯飞兜底 120s = 最坏 240s，maxDuration 留足 buffer
 export const maxDuration = 300;
 
-// 单次大调用硬超时：120s × 2 链路 = 最坏 240s
-const COMBINED_TIMEOUT_MS = 120_000;
+// 单次大调用硬超时：讯飞完整 5 模块偶发会超过 120s；前端 fetch 250s，服务端留一点余量。
+const COMBINED_TIMEOUT_MS = 220_000;
 
 // ============================================================
 // 通用 helpers
@@ -342,10 +342,13 @@ function validatePositionRec(
     if (!c || typeof c.name !== "string" || !c.name.trim())
       return `${label}.coreCompetencies.name 缺失`;
     const name = c.name.trim();
+    // 「泛化标签 / 重复 name」是内容质量（命名够不够岗位定制），不是结构问题：
+    // 讯飞常用「沟通表达」等泛化词、偶有重名，硬拒收会触发 retry → 超时 → 掉 mock。
+    // 降级为只 warn；name 非空 / 数量 5 项 / score 合法 这些结构硬校验保留。
     if (GENERIC_ABILITY_TAGS.has(name))
-      return `${label}.coreCompetencies 出现泛化标签「${name}」，应按岗位定制`;
-    if (seen.has(name))
-      return `${label}.coreCompetencies 出现重复 name「${name}」`;
+      console.warn(`[positioning-competency] ${label}.coreCompetencies 用了泛化标签「${name}」（不拒收，仅记录）`);
+    else if (seen.has(name))
+      console.warn(`[positioning-competency] ${label}.coreCompetencies 出现重复 name「${name}」（不拒收，仅记录）`);
     seen.add(name);
     if (typeof c.score !== "number" || !Number.isFinite(c.score) || c.score < 0 || c.score > 100)
       return `${label}.coreCompetencies.score 非法（${String(c.score)}）`;
@@ -380,7 +383,11 @@ function validatePositioning(d: Positioning): string | null {
   const s = validatePositionRec(d?.secondary, "positioning.secondary");
   if (s) return s;
   const w = validatePositioningWaterline(d);
-  if (w) return w;
+  // 水位质检（均值≥70 + 至少 1 项≤70）降级为只 warn、不再拒收：这两个条件互相打架、
+  // 窄窗口，讯飞带随机性难稳定凑齐；凑不齐就废掉整份报告 → 同链路 retry → retry 超时
+  // （Request aborted）→ 两链路都失败 → 静默掉 mock（社保局演示翻车根因）。
+  // 报告可用性不依赖该分数水位；coreCompetencies 的形状校验已在 validatePositionRec 保留。
+  if (w) console.warn("[positioning-waterline] 软提示（不拒收，仅记录）:", w);
   return null;
 }
 
@@ -438,7 +445,8 @@ function buildAllValidator(hasResume: boolean, scoring: ScoringResult) {
     const aErr = validateAdvice(d.advice);
     if (aErr) return aErr;
 
-    // 全字段反向词校验（type + traits + description + 4 conclusion + summary）
+    // 全字段反向词质检（type + traits + description + 4 conclusion + summary）。
+    // 这属于内容质量检查，不应把结构完整的真实报告整份打成 mock。
     const text = collectAllOverviewText(d.overview);
     const conflicts = detectReverseWords(text, scoring.fourDim);
     if (conflicts.length > 0) {
@@ -449,7 +457,7 @@ function buildAllValidator(hasResume: boolean, scoring: ScoringResult) {
           return `${c.dimensionName}（${side}：${tendencyChip(dimScore.score, c.dimension)}）出现反向核心词 [${c.hits.join("、")}]`;
         })
         .join("; ");
-      return `${REVERSE_WORD_ISSUE_PREFIX}: ${summary}`;
+      console.warn("[overview-reverse-word] 软提示（不拒收，仅记录）:", summary);
     }
     return null;
   };
@@ -700,7 +708,10 @@ export async function POST(req: NextRequest) {
     raw = await callWithFallback<AllSections>({
       systemPrompt: buildMegaSystemPrompt(hasResume),
       userPrompt,
-      maxTokens: 8000,
+      // 放开原 8000 上限：完整报告 JSON 偶尔 >8000 token 会被硬截断（tryFixAndParse 只能补括号、补不回内容）。
+      // 实际生效模型是讯飞 astron-code-latest（输出上限 3.2 万+），16000 给正常输出量（~6000-8000）留 2x buffer，
+      // 消除截断且不逼近 120s 硬超时（max_tokens 只是上限，模型吐完 JSON 即止，不会强行吐满）。
+      maxTokens: 16000,
       temperature: 0.6,
       timeoutMs: COMBINED_TIMEOUT_MS,
       validator: buildAllValidator(hasResume, scoring),
