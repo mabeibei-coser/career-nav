@@ -344,6 +344,8 @@ function buildMockReport(
 
 // ===== 主页面 =====
 
+const COUNTDOWN_START = 45;
+
 export default function LoadingPage() {
   const router = useRouter();
   const [progress, setProgress] = useState<SectionProgress[]>([]);
@@ -351,6 +353,7 @@ export default function LoadingPage() {
   const [phase, setPhase] = useState<
     "loading" | "done" | "timeout" | "fatal"
   >("loading");
+  const [remaining, setRemaining] = useState(COUNTDOWN_START);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // 超时按钮点了之后再点击会触发"用 mock"，需要保存 payload
   const payloadRef = useRef<{
@@ -366,6 +369,15 @@ export default function LoadingPage() {
 
   useEffect(() => {
     phaseRef.current = phase;
+  }, [phase]);
+
+  // 倒计时：每秒 -1，到 0 后停在 0（仅 loading 阶段跑）
+  useEffect(() => {
+    if (phase !== "loading") return;
+    const id = window.setInterval(() => {
+      setRemaining((r) => (r > 0 ? r - 1 : 0));
+    }, 1000);
+    return () => clearInterval(id);
   }, [phase]);
 
   useEffect(() => {
@@ -541,7 +553,7 @@ export default function LoadingPage() {
       p.status === "skipped"
   ).length;
   const total = 5;
-  const pct = phase === "done" ? 100 : (completedCount / total) * 100;
+  const pct = phase === "done" ? 100 : 60 + (completedCount / total) * 40;
 
   // ---------- 超时处理：示例报告按钮 ----------
   const handleUseMock = () => {
@@ -592,8 +604,12 @@ export default function LoadingPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-[var(--navy-950)] tracking-tight mb-2 text-balance">
             正在生成你的职业导航报告
           </h1>
-          <p className="text-[13px] sm:text-sm text-[var(--muted-foreground)]">
-            报告生成约 30 秒，请稍后
+          <p className="text-[13px] sm:text-sm text-[var(--muted-foreground)] tabular-nums">
+            {phase === "loading"
+              ? remaining > 0
+                ? `预计剩余 ${remaining} 秒，请稍后`
+                : "AI 正在收尾，请稍后"
+              : `报告生成约 ${COUNTDOWN_START} 秒，请稍后`}
           </p>
         </motion.div>
 
