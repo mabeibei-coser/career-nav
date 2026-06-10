@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -94,6 +95,7 @@ export default function HomePage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resumeError, setResumeError] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const saved = getSavedDefaults();
   const [resume, setResume] = useState<FileUploadValue | null>(saved.resume);
 
@@ -559,7 +561,48 @@ export default function HomePage() {
             </div>
           </motion.div>
 
-          {/* 6. 提交按钮 —— 移动端 sticky 底部 */}
+          {/* 6. 协议勾选 —— 必勾才能提交 */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.48, ease: cubicEase }}
+            className="pt-2"
+          >
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
+                disabled={isSubmitting}
+                className="mt-[3px] size-4 shrink-0 rounded border-[var(--blue-300)] text-[var(--blue-600)] focus:ring-2 focus:ring-[var(--blue-500)]/30 accent-[var(--blue-600)] cursor-pointer"
+                aria-label="我已阅读并同意服务使用协议和隐私政策"
+              />
+              <span className="text-[13px] leading-[1.55] text-[var(--muted-foreground)]">
+                我已阅读并同意
+                <Link
+                  href="/legal/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-[var(--blue-600)] font-medium hover:underline mx-0.5"
+                >
+                  服务使用协议
+                </Link>
+                和
+                <Link
+                  href="/legal/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-[var(--blue-600)] font-medium hover:underline mx-0.5"
+                >
+                  隐私政策
+                </Link>
+              </span>
+            </label>
+          </motion.div>
+
+          {/* 7. 提交按钮 —— 移动端 sticky 底部 */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -568,7 +611,7 @@ export default function HomePage() {
           >
             <Button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !agreed}
                 className="w-full h-12 text-base font-medium bg-gradient-to-br from-[var(--blue-500)] to-[var(--blue-700)] hover:brightness-110 active:brightness-95 text-white rounded-xl btn-glow transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed group"
               >
                 <span className="flex items-center gap-2">

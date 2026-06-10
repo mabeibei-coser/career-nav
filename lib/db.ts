@@ -67,5 +67,24 @@ export function getDb(): Database.Database {
   _db.exec(
     `CREATE INDEX IF NOT EXISTS idx_reports_uuid ON reports(uuid)`
   );
+
+  // legal_documents：服务使用协议 / 隐私政策。admin-hub 后台编辑、前台只读。
+  // 与 ATA100 / ASG100 同结构。type='terms'|'privacy'，内容存 Markdown。
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS legal_documents (
+      type        TEXT PRIMARY KEY,
+      title       TEXT NOT NULL,
+      content     TEXT NOT NULL DEFAULT '',
+      updated_at  INTEGER NOT NULL
+    )
+  `);
+  const now = Date.now();
+  _db.prepare(
+    "INSERT OR IGNORE INTO legal_documents(type, title, content, updated_at) VALUES (?, ?, ?, ?)"
+  ).run("terms", "服务使用协议", "", now);
+  _db.prepare(
+    "INSERT OR IGNORE INTO legal_documents(type, title, content, updated_at) VALUES (?, ?, ?, ?)"
+  ).run("privacy", "隐私政策", "", now);
+
   return _db;
 }
