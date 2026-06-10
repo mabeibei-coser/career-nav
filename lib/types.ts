@@ -241,6 +241,12 @@ export interface ReportData {
   positioning: Positioning;
   resumeDiagnosis: ResumeDiagnosis | null;
   advice: Advice;
+  /**
+   * 就业指数（0-100，5 的倍数）— 由 generate 端点的 AI 综合背景/能力/经验/期望合理性给出。
+   * 仅供 admin 后台展示就业帮扶难度，C 端报告组件不渲染。
+   * 老数据可能缺失，admin 端需兜底为 — 显示。
+   */
+  employmentIndex?: number;
 }
 
 // ========== Section 调度类型（前端并发使用） ==========

@@ -56,6 +56,8 @@ interface GenerateSections {
   positioning: Positioning;
   resumeDiagnosis: ResumeDiagnosis | null;
   advice: Advice;
+  /** admin 后台专用就业指数（0-100，5 的倍数）；C 端不渲染 */
+  employmentIndex?: number;
 }
 
 interface CallPayload {
@@ -320,5 +322,14 @@ export async function consumeAll(
     interviewQ1Q2: options.interviewQ1Q2 ?? {},
   };
 
-  return { meta, overview, strength, positioning, resumeDiagnosis, advice };
+  return {
+    meta,
+    overview,
+    strength,
+    positioning,
+    resumeDiagnosis,
+    advice,
+    // employmentIndex 仅 admin 后台用，C 端不渲染；缺失时 admin 端兜底显示 —
+    employmentIndex: sections?.employmentIndex,
+  };
 }

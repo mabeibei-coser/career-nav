@@ -102,6 +102,12 @@ interface AllSections {
   positioning: Positioning;
   resumeDiagnosis: ResumeDiagnosis | null;
   advice: Advice;
+  /**
+   * 就业指数（0-100，5 的倍数）— admin 后台专用，C 端不展示。
+   * AI 综合背景/能力/经验/期望合理性给出一个就业帮扶难度评估：
+   * 90 极易（背景好+能力强+经验足+期望合理），10 极难（反之），一般 30-60，从严打分。
+   */
+  employmentIndex: number;
 }
 
 // ============================================================
@@ -216,6 +222,28 @@ ${APPLICANT_BASELINE}
 - general_unemployed 必须从 APPLICANT_BASELINE 白名单选岗
 - 与 overview.personality.type、strength.strengths 主要优势保持逻辑一致
 ${resumeBlock}
+【模块 ⑥ employmentIndex（就业指数 — admin 后台专用，C 端不展示，0-100 整数）】
+评分目标：评估「该用户的就业帮扶难度」，让 HR 一眼看出谁好就业、谁需要重点帮扶。
+评分维度（四维综合 + 从严打分）：
+- 背景（学历层级、简历厚度、院校/项目质量）
+- 能力（量表四维 + 六能力分布，是否有明显短板）
+- 经验（工作年限、相关行业积累、可迁移经历的充分性）
+- 期望合理性（targetPosition vs 当前背景/能力/经验的匹配度，是否够得着、是否离谱）
+分数刻度（必须严格遵守）：
+- **5 的倍数**，仅允许 10/15/20/25/30/.../85/90 这 17 个离散值；禁止其它数（5、95、100、73 等）
+- **绝大多数人落 30-60**（一般人群）
+- 70-90 留给"明显好就业"（背景能力经验匹配 + 期望合理）
+- 10-25 留给"极难帮扶"（背景能力经验都差 + 期望明显不合理）
+- 从严打分：拿不准时往低估，**不要默认 50**
+打分对照（先选档位再 5 分微调）：
+- 90 极易：本科及以上 + 量表均分 ≥ 75 + 3 年+对口经验 + 目标岗位完全匹配现有能力
+- 75-85 易：本科 / 量表均分 ≥ 65 / 1-3 年经验 / 目标岗位基本对口
+- 50-70 中等：大专或本科 / 量表均分 50-65 / 经验有限但有零散积累 / 目标岗位略高于当前
+- 30-45 偏难：学历偏低 / 量表均分 35-50 / 经验断档或不对口 / 目标岗位明显高于当前
+- 10-25 极难：学历低 + 量表均分 < 35 / 经验空白 / 目标岗位严重不切实际（如无相关背景却要高薪管理岗）
+应届毕业生（recent_grad）按 "经验少" 算，但若量表均分高 + 简历有亮眼项目可给 60-75；
+求职者（general_job_seeker）若大龄 + 期望与现有能力差距大，从严往下打。
+
 【模块 ⑤ advice（行动建议）】
 topThree — 用户下一步最重要的三件事，按优先级从高到低。每件事：
 - title: 4-10 字动作标题（如"重写简历核心经历"）
@@ -245,7 +273,8 @@ topThree — 用户下一步最重要的三件事，按优先级从高到低。�
     "secondary": { "position": "string", "matchScore": 0, "culture": "string", "teamRole": "string", "coreResponsibilities": ["string"], "coreCompetencies": [{ "name": "string", "score": 0 }], "fitReason": "string", "specialNote": "string" }
   },
   "resumeDiagnosis": ${hasResume ? `{ "overallScore": 0, "issues": [{ "title": "string", "detail": "string", "priority": "high|medium|low", "revisionExample": "string" }], "suggestions": [{ "title": "string", "detail": "string" }] }` : "null"},
-  "advice": { "topThree": [{ "title": "string", "detail": "string", "deadline": "string" }] }
+  "advice": { "topThree": [{ "title": "string", "detail": "string", "deadline": "string" }] },
+  "employmentIndex": 0
 }
 
 注意：上述 schema 里的 "string" / 0 都是占位类型说明，必须替换为真实内容；任何 "..."、空串、"<...>" 都会被拒收。`;
@@ -445,6 +474,14 @@ function buildAllValidator(hasResume: boolean, scoring: ScoringResult) {
     const aErr = validateAdvice(d.advice);
     if (aErr) return aErr;
 
+    // employmentIndex 形状（5 倍数 + 10-90 范围）软校验：偏差 normalize 兜底，不触发整份报告 retry。
+    // 整份报告内容是合格的，仅就业指数离谱犯不上掉 mock。
+    if (typeof d.employmentIndex !== "number" || !Number.isFinite(d.employmentIndex)) {
+      console.warn(`[employment-index] 缺失或非数字（${String(d.employmentIndex)}），将兜底成 30`);
+    } else if (d.employmentIndex % 5 !== 0 || d.employmentIndex < 10 || d.employmentIndex > 90) {
+      console.warn(`[employment-index] 非法值 ${d.employmentIndex}（应是 10-90 的 5 倍数），将 clamp 修正`);
+    }
+
     // 全字段反向词质检（type + traits + description + 4 conclusion + summary）。
     // 这属于内容质量检查，不应把结构完整的真实报告整份打成 mock。
     const text = collectAllOverviewText(d.overview);
@@ -620,6 +657,15 @@ function patchAdvice(d: Advice): Advice {
   return { topThree: valid.slice(0, 3) };
 }
 
+function normalizeEmploymentIndex(raw: unknown): number {
+  // LLM 输出兜底：非数字 / 越界 / 非 5 倍数 → 修正到 [10, 90] 范围内的 5 倍数
+  // 默认 30（一般人群偏下，符合"从严打分、拿不准往低估"的产品要求）
+  const v = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(v)) return 30;
+  const clamped = Math.max(10, Math.min(90, Math.round(v)));
+  return Math.round(clamped / 5) * 5;
+}
+
 function buildAllMock(scoring: ScoringResult, hasResume: boolean): AllSections {
   return {
     overview: {
@@ -639,6 +685,7 @@ function buildAllMock(scoring: ScoringResult, hasResume: boolean): AllSections {
     positioning: MOCK_POSITIONING,
     resumeDiagnosis: hasResume ? MOCK_RESUME_DIAGNOSIS : null,
     advice: MOCK_ADVICE,
+    employmentIndex: 30,
   };
 }
 
@@ -655,6 +702,7 @@ export async function POST(req: NextRequest) {
         positioning: MOCK_POSITIONING,
         resumeDiagnosis: MOCK_RESUME_DIAGNOSIS,
         advice: MOCK_ADVICE,
+        employmentIndex: 45,
       } satisfies AllSections,
       source: "mock",
     });
@@ -735,6 +783,7 @@ export async function POST(req: NextRequest) {
     ? (raw.resumeDiagnosis ?? MOCK_RESUME_DIAGNOSIS)
     : null;
   const advice = patchAdvice(raw.advice);
+  const employmentIndex = normalizeEmploymentIndex(raw.employmentIndex);
 
   return NextResponse.json({
     data: {
@@ -743,6 +792,7 @@ export async function POST(req: NextRequest) {
       positioning,
       resumeDiagnosis,
       advice,
+      employmentIndex,
     } satisfies AllSections,
     source: "deepseek",
   });
