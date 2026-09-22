@@ -14,6 +14,20 @@ import { InterviewPage } from "../pages/interview.page";
 import { LoadingPage } from "../pages/loading.page";
 import { ReportPage } from "../pages/report.page";
 
+test.beforeEach(async ({ page, browserName }, testInfo) => {
+  if (browserName !== "webkit" || process.platform !== "win32") return;
+  testInfo.annotations.push({ type: "limitation", description: "Windows WebKit 不支持实际 MP3 播放；本流程使用媒体事件 mock" });
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = function () {
+      setTimeout(() => this.dispatchEvent(new Event("ended")), 200);
+      return Promise.resolve();
+    };
+    Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
+      value: async () => { throw new DOMException("Test microphone denied", "NotAllowedError"); },
+    });
+  });
+});
+
 // 移动端进入题目和访谈题切换稍慢，给宽裕一点
 test.describe("完整流程：form → quiz → interview → report", () => {
   test("recent_grad 身份跑通", async ({ page, isMobile }) => {

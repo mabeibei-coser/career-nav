@@ -93,3 +93,6 @@ C\:*
 playwright-report/
 test-results/
 e2e/fixtures/.tmp-*
+
+# 本地维护检查回执
+.planning/_system/

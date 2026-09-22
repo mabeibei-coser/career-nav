@@ -2,6 +2,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+维护入口：[A300 维护经验与问题索引](docs/maintenance-experience.md)；执行前读取 [Coding 共用规则](../AGENTS.md)，收尾按 [维护检查说明](../.gstack/maintenance/README.md) 执行 check / close。
+
 First, run the development server:
 
 ```bash

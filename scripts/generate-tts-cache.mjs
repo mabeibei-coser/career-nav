@@ -78,6 +78,7 @@ async function tts(text) {
   const res = await fetch("https://openspeech.bytedance.com/api/v1/tts", {
     method: "POST",
     headers: {
+      Authorization: `Bearer;${ACCESS_KEY}`,
       "X-Api-App-Key": APP_KEY,
       "X-Api-Access-Key": ACCESS_KEY,
       "X-Api-Resource-Id": "volc.service_type.10029",

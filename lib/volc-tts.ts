@@ -9,6 +9,9 @@ const DEFAULT_SPEAKER = "zh_female_vv_uranus_bigtts";
  * @returns base64-encoded MP3 string, or "" if synthesis fails
  */
 export async function synthesizeTTS(text: string): Promise<string> {
+  // Q3/Q4 也会单独请求 TTS；端到端 mock 测试不得调用付费语音服务。
+  if (process.env.E2E_MOCK_MODE === "true") return "";
+
   const appKey = process.env.VOLC_TTS_APP_KEY;
   const accessKey = process.env.VOLC_TTS_ACCESS_KEY;
 
@@ -27,6 +30,8 @@ export async function synthesizeTTS(text: string): Promise<string> {
       signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
+        // /api/v1/tts 使用 Bearer;token，X-Api-* 不能替代此鉴权头。
+        Authorization: `Bearer;${accessKey}`,
         "X-Api-App-Key": appKey,
         "X-Api-Access-Key": accessKey,
         "X-Api-Resource-Id": RESOURCE_ID,

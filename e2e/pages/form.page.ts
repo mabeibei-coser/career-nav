@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 export interface FormData {
   /** 身份选择（2026-06 起：recent_grad / general_job_seeker） */
@@ -54,8 +54,17 @@ export class FormPage {
       .first()
       .click();
 
-    // 2. birthDate month input（必填）
-    await this.page.locator("#birthDate").fill(data.birthDate);
+    // 2. birthDate 滚轮选择（已替代原生 month input）
+    await this.page.locator("#birthDate").click();
+    const picker = this.page.getByRole("dialog", { name: "设置月份" });
+    const [year, month] = data.birthDate.split("-").map(Number);
+    for (const value of [year, month]) {
+      const item = picker.getByText(String(value), { exact: true });
+      await item.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await expect(item).toHaveClass(/font-medium/);
+    }
+    await picker.getByRole("button", { name: "确认", exact: true }).click();
+    await expect(this.page.locator("#birthDate")).toHaveText(`${year}年${month}月`);
 
     // 3. targetPosition input（选填，可跳过）
     if (data.targetPosition) {
@@ -100,8 +109,12 @@ export class FormPage {
 
   /** 提交表单，经过 /preparing → /intro 过渡页后到达 /quiz */
   async submit() {
+    await this.page.getByRole("checkbox", { name: "我已阅读并同意服务使用协议和隐私政策" }).check();
     await this.page.getByRole("button", { name: "下一步" }).click();
-    // preparing 页自动播完动画后跳 /intro
+    // iOS 准备动画后需一次用户点击来解锁欢迎语；其他端自动跳转。
+    if (/iPad|iPhone|iPod/.test(await this.page.evaluate(() => navigator.userAgent))) {
+      await this.page.getByRole("button", { name: /^开始$/ }).click({ timeout: 30_000 });
+    }
     await this.page.waitForURL("**/intro", { timeout: 30_000 });
     // intro 页需要点"开始测评"按钮
     const startBtn = this.page.getByRole("button", { name: /开始测评/ });

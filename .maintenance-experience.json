@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "project_id": "A300",
+  "case_prefix": "A300",
+  "document": "docs/maintenance-experience.md",
+  "source_roots": [
+    "app",
+    "components",
+    "lib",
+    "scripts",
+    "docs",
+    "e2e",
+    ".planning"
+  ],
+  "daily_owner": "coding-maintenance-daily",
+  "enrolled_at": "2026-09-22T21:04:40+08:00"
+}
