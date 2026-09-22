@@ -14,7 +14,7 @@
  */
 
 import { writeFileSync, mkdirSync, existsSync } from "fs";
-import { randomUUID } from "crypto";
+import { requestSpeech } from "../lib/volc-tts-provider.mjs";
 import { readFileSync } from "fs";
 import path from "path";
 
@@ -75,27 +75,12 @@ const OUT_DIR = path.resolve(process.cwd(), "public/audio");
 mkdirSync(OUT_DIR, { recursive: true });
 
 async function tts(text) {
-  const res = await fetch("https://openspeech.bytedance.com/api/v1/tts", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer;${ACCESS_KEY}`,
-      "X-Api-App-Key": APP_KEY,
-      "X-Api-Access-Key": ACCESS_KEY,
-      "X-Api-Resource-Id": "volc.service_type.10029",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      app: { appid: APP_KEY, cluster: "volcano_bigtts" },
-      user: { uid: "build-time" },
-      audio: { voice_type: SPEAKER, encoding: "mp3", speed_ratio: 1.0 },
-      request: { reqid: randomUUID(), text, operation: "query" },
-    }),
+  return requestSpeech(text, {
+    appKey: APP_KEY,
+    accessKey: ACCESS_KEY,
+    speaker: SPEAKER,
+    signal: AbortSignal.timeout(10_000),
   });
-  const d = await res.json();
-  if (!d.data) {
-    throw new Error(`TTS 失败 (code=${d.code} msg=${d.message ?? "?"})`);
-  }
-  return Buffer.from(d.data, "base64");
 }
 
 async function generate(name, text) {
